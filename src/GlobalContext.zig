@@ -64,6 +64,10 @@ pub const Commands = struct {
         try __context.bindGraphicPipeline(handle);
     }
 
+    pub fn BindComputePipeline(handle: PipelineHandle) !void {
+        try __context.bindComputePipeline(handle);
+    }
+
     pub fn BindTexture(name: []const u8, texture: Texture) !void {
         try __context.bindTexture(name, texture);
     }
@@ -183,5 +187,14 @@ pub const Commands = struct {
             @intCast(commandCount),
             @intCast(commandStride),
         );
+    }
+
+    pub fn Dispatch(x: u32, y: u32, z: u32) void {
+        gl.dispatchCompute(x, y, z);
+    }
+
+    pub fn DispatchIndirect(commands: Buffer, commandOffset: usize) void {
+        gl.bindBuffer(gl.DISPATCH_INDIRECT_BUFFER, commands.handle);
+        gl.dispatchComputeIndirect(@intCast(commandOffset));
     }
 };

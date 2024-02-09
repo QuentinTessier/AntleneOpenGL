@@ -1,6 +1,7 @@
 const std = @import("std");
 const gl = @import("gl4_6.zig");
 
+pub const ComputePipeline = @import("./Pipeline/ComputePipeline.zig");
 pub const GraphicPipeline = @import("./Pipeline/GraphicPipeline.zig");
 const PipelineInformation = @import("./Pipeline/PipelineInformation.zig");
 
@@ -29,6 +30,7 @@ pub const PipelineHandle = packed struct(u16) {
 
 pipelineCounter: u15 = 0,
 graphicPipelineCache: std.AutoHashMapUnmanaged(u16, GraphicPipeline) = .{},
+computePipelineCache: std.AutoHashMapUnmanaged(u16, ComputePipeline) = .{},
 vertexArrayObjectCache: std.AutoHashMapUnmanaged(u64, VertexArrayObject) = .{},
 samplerObjectCache: std.AutoHashMapUnmanaged(u64, SamplerObject) = .{},
 
@@ -42,9 +44,16 @@ pub fn deinit(self: *Caches, allocator: std.mem.Allocator) void {
     {
         var ite = self.graphicPipelineCache.iterator();
         while (ite.next()) |entry| {
-            entry.value_ptr.deinit();
+            entry.value_ptr.deinit(allocator);
         }
         self.graphicPipelineCache.deinit(allocator);
+    }
+    {
+        var ite = self.computePipelineCache.iterator();
+        while (ite.next()) |entry| {
+            entry.value_ptr.deinit(allocator);
+        }
+        self.computePipelineCache.deinit(allocator);
     }
     {
         var ite = self.vertexArrayObjectCache.iterator();
@@ -83,6 +92,22 @@ pub fn createGraphicPipeline(self: *Caches, allocator: std.mem.Allocator, info: 
         entry.value_ptr.* = pipeline;
     }
 
+    return id;
+}
+
+pub fn createComputePipeline(self: *Caches, allocator: std.mem.Allocator, info: PipelineInformation.ComputePipelineInformation) !PipelineHandle {
+    const id = PipelineHandle{
+        .type = .Compute,
+        .id = self.pipelineCounter,
+    };
+
+    const entry = try self.computePipelineCache.getOrPut(allocator, id);
+    if (!entry.found_existing) {
+        std.log.info("Creating new compute shader with id: {}", .{id});
+        const pipeline = ComputePipeline.init(info);
+        self.pipelineCounter += 1;
+        entry.value_ptr.* = pipeline;
+    }
     return id;
 }
 

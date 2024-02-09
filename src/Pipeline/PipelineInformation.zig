@@ -197,11 +197,16 @@ pub const PipelineColorBlendState = struct {
     blendConstants: [4]f32 = .{ 0, 0, 0, 0 },
 };
 
+pub const ShaderSource = union(enum(u32)) {
+    glsl: []const u8,
+    spriv: []const u8,
+};
+
 pub const GraphicPipelineInformation = struct {
     name: ?[]const u8 = null,
 
-    vertexShaderSource: []const u8,
-    fragmentShaderSource: []const u8,
+    vertexShaderSource: ShaderSource,
+    fragmentShaderSource: ShaderSource,
 
     inputAssemblyState: PipelineInputAssemblyState = .{},
     vertexInputState: PipelineVertexInputState,
@@ -211,3 +216,118 @@ pub const GraphicPipelineInformation = struct {
     stencilState: PipelineStencilState = .{},
     colorBlendState: PipelineColorBlendState = .{},
 };
+
+pub const ComputePipelineInformation = struct {
+    name: ?[]const u8 = null,
+
+    computeShaderSource: ShaderSource,
+};
+
+pub fn compileShader(stage: u32, source: ShaderSource) !u32 {
+    const shader = gl.createShader(stage);
+    switch (source) {
+        .spriv => |spirv| {
+            gl.shaderBinary(
+                1,
+                @ptrCast(&shader),
+                gl.SHADER_BINARY_FORMAT_SPIR_V,
+                spirv.ptr,
+                @intCast(spirv.len),
+            );
+            gl.specializeShader(shader, "main", 0, null, null);
+        },
+        .glsl => |glsl| {
+            gl.shaderSource(shader, 1, @ptrCast(&glsl.ptr), null);
+            gl.compileShader(shader);
+        },
+    }
+
+    var success: i32 = 0;
+    gl.getShaderiv(shader, gl.COMPILE_STATUS, @ptrCast(&success));
+    if (success != gl.TRUE) {
+        var buffer: [1024]u8 = undefined;
+        gl.getShaderInfoLog(shader, 1024, null, (&buffer).ptr);
+        std.log.err("{s}", .{buffer});
+        return error.FailedShaderCompilation;
+    }
+
+    return shader;
+}
+
+pub fn linkProgram(shaders: []const u32) !u32 {
+    const program = gl.createProgram();
+    for (shaders) |shader| {
+        gl.attachShader(program, shader);
+    }
+    gl.linkProgram(program);
+    {
+        var success: i32 = 0;
+        gl.getProgramiv(program, gl.LINK_STATUS, &success);
+        if (success != gl.TRUE) {
+            var size: isize = 0;
+            var buffer: [1024]u8 = undefined;
+            gl.getProgramInfoLog(program, 1024, @ptrCast(&size), (&buffer).ptr);
+            std.log.err("Failed to link program: {s}", .{buffer[0..@intCast(size)]});
+            return error.ProgramLinkingFailed;
+        }
+    }
+    for (shaders) |shader| {
+        gl.deleteShader(shader);
+    }
+    return program;
+}
+
+pub fn reflectInterface(allocator: std.mem.Allocator, program: u32, interface: gl.GLenum) !std.StringArrayHashMapUnmanaged(u32) {
+    var nActiveResources: i32 = 0;
+    gl.getProgramInterfaceiv(program, interface, gl.ACTIVE_RESOURCES, @ptrCast(&nActiveResources));
+
+    var resources: std.StringArrayHashMapUnmanaged(u32) = .{};
+    for (0..@intCast(nActiveResources)) |i| {
+        var name_length: i32 = 0;
+
+        const property: i32 = gl.NAME_LENGTH;
+        gl.getProgramResourceiv(
+            program,
+            interface,
+            @intCast(i),
+            1,
+            @ptrCast(&property),
+            1,
+            null,
+            @ptrCast(&name_length),
+        );
+
+        const name = try allocator.alloc(u8, @intCast(name_length));
+        gl.getProgramResourceName(
+            program,
+            interface,
+            @intCast(i),
+            @intCast(name.len),
+            null,
+            name.ptr,
+        );
+
+        if (interface == gl.UNIFORM_BLOCK or interface == gl.SHADER_STORAGE_BLOCK) {
+            const binding_property: i32 = gl.BUFFER_BINDING;
+            var binding: i32 = -1;
+            gl.getProgramResourceiv(
+                program,
+                interface,
+                @intCast(i),
+                1,
+                @ptrCast(&binding_property),
+                1,
+                null,
+                @ptrCast(&binding),
+            );
+            try resources.put(allocator, name, @intCast(binding));
+        } else if (interface == gl.UNIFORM) {
+            const location = gl.getProgramResourceLocation(program, interface, name.ptr);
+
+            if (location >= 0) {
+                try resources.put(allocator, name, @intCast(location));
+            }
+        }
+    }
+    return resources;
+}

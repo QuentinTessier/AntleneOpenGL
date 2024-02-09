@@ -108,6 +108,8 @@ pub fn renderToSwapchain(_: *Context, info: SwapchainRenderingInformation, pass:
 }
 
 pub fn bindGraphicPipeline(self: *Context, pipeline: Caches.PipelineHandle) !void {
+    std.debug.assert(pipeline.type == .Graphics);
+
     const current = self.caches.graphicPipelineCache.get(pipeline.toU16()) orelse return error.InvalidPipelineHandle;
     const previous = self.caches.graphicPipelineCache.get(self.previousPipeline.toU16());
 
@@ -154,6 +156,15 @@ pub fn bindGraphicPipeline(self: *Context, pipeline: Caches.PipelineHandle) !voi
     self.previousPipeline = pipeline;
 }
 
+pub fn bindComputePipeline(self: *Context, pipeline: Caches.PipelineHandle) !void {
+    std.debug.assert(pipeline.type == .Compute);
+
+    const current = self.caches.computePipelineCache.get(pipeline.toU16()) orelse return error.InvalidPipelineHandle;
+    if (self.previousPipeline.type == .Graphics or self.previousPipeline.id != pipeline.id) {
+        gl.useProgram(current.handle);
+    }
+}
+
 pub fn bindTextureBase(_: *Context, index: u32, texture: Texture, sampler: ?u32) void {
     gl.bindTextureUnit(index, texture.handle);
     if (sampler) |s| {
@@ -162,11 +173,23 @@ pub fn bindTextureBase(_: *Context, index: u32, texture: Texture, sampler: ?u32)
 }
 
 pub fn bindTexture(self: *Context, name: []const u8, texture: Texture) !void {
-    const pipeline = self.caches.graphicPipelineCache.get(self.previousPipeline.toU16()) orelse {
-        std.log.err("The current binded pipeline is invalid or missing", .{});
-        return error.InvalidOrMissingGraphicPipeline;
+    const samplers: std.StringHashMap(u32) = switch (self.previousPipeline.type) {
+        .Compute => blk: {
+            const p = self.caches.computePipelineCache.get(self.previousPipeline.toU16()) orelse {
+                std.log.err("The current binded pipeline is invalid or missing", .{});
+                return error.InvalidOrMissingGraphicPipeline;
+            };
+            break :blk p.sampler;
+        },
+        .Graphics => blk: {
+            const p = self.caches.graphicPipelineCache.get(self.previousPipeline.toU16()) orelse {
+                std.log.err("The current binded pipeline is invalid or missing", .{});
+                return error.InvalidOrMissingGraphicPipeline;
+            };
+            break :blk p.sampler;
+        },
     };
-    const binding = pipeline.samplers.get(name) orelse {
+    const binding = samplers.get(name) orelse {
         std.log.err("Failed to find texture binding point named: {s}", .{name});
         return error.NoNamedTextureBinding;
     };
@@ -174,11 +197,23 @@ pub fn bindTexture(self: *Context, name: []const u8, texture: Texture) !void {
 }
 
 pub fn bindSampledTexture(self: *Context, name: []const u8, texture: Texture, sampler: u64) !void {
-    const pipeline = self.caches.graphicPipelineCache.get(self.previousPipeline.toU16()) orelse {
-        std.log.err("The current binded pipeline is invalid or missing", .{});
-        return error.InvalidOrMissingGraphicPipeline;
+    const samplers: std.StringHashMap(u32) = switch (self.previousPipeline.type) {
+        .Compute => blk: {
+            const p = self.caches.computePipelineCache.get(self.previousPipeline.toU16()) orelse {
+                std.log.err("The current binded pipeline is invalid or missing", .{});
+                return error.InvalidOrMissingGraphicPipeline;
+            };
+            break :blk p.sampler;
+        },
+        .Graphics => blk: {
+            const p = self.caches.graphicPipelineCache.get(self.previousPipeline.toU16()) orelse {
+                std.log.err("The current binded pipeline is invalid or missing", .{});
+                return error.InvalidOrMissingGraphicPipeline;
+            };
+            break :blk p.sampler;
+        },
     };
-    const binding = pipeline.samplers.get(name) orelse {
+    const binding = samplers.get(name) orelse {
         std.log.err("Failed to find texture binding point named: {s}", .{name});
         return error.NoNamedTextureBinding;
     };
