@@ -17,7 +17,7 @@ fn messageCallback(source: gl.GLenum, _type: gl.GLenum, id: gl.GLuint, severity:
     std.log.info("{} {} {} {} {} : {s}", .{ source, _type, id, severity, length, message });
 }
 
-pub fn init(allocator: std.mem.Allocator, loadFunc: *const fn (void, [:0]const u8) ?glFunctionPointer) !void {
+pub fn init(allocator: std.mem.Allocator, loadFunc: fn (void, [:0]const u8) ?glFunctionPointer) !void {
     if (!__initialized) {
         try gl.load(void{}, loadFunc);
         gl.enable(gl.DEBUG_OUTPUT);
