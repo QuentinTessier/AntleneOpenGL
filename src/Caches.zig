@@ -70,6 +70,7 @@ pub fn createGraphicPipeline(self: *Caches, allocator: std.mem.Allocator, info: 
 
     const entry = try self.graphicPipelineCache.getOrPut(allocator, id.toU16());
     if (!entry.found_existing) {
+        std.log.info("Creating new graphics pipeline with id: {}", .{id});
         var pipeline = try GraphicPipeline.init(allocator, info);
 
         const vao_hash = VertexArrayObject.hash(info.vertexInputState);
