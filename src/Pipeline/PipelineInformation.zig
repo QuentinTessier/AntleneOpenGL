@@ -1,5 +1,5 @@
 const std = @import("std");
-const gl = @import("gl");
+const gl = @import("../gl4_6.zig");
 
 pub const VertexInputFormat = enum(u32) {
     float = gl.FLOAT,

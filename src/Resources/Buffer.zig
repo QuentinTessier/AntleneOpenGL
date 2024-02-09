@@ -1,5 +1,5 @@
 const std = @import("std");
-const gl = @import("gl");
+const gl = @import("../gl4_6.zig");
 
 const BufferStorageFlags = packed struct(u8) {
     dynamic: bool = false,
