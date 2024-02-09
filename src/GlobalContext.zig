@@ -2,6 +2,7 @@ const std = @import("std");
 const gl = @import("gl4_6.zig");
 const Context = @import("Context.zig");
 
+pub const glFunctionPointer = gl.FunctionPointer;
 pub const PipelineHandle = Context.PipelineHandle;
 pub const Texture = Context.Texture;
 pub const Sampler = @import("Resources/Sampler.zig");
@@ -16,7 +17,7 @@ fn messageCallback(source: gl.GLenum, _type: gl.GLenum, id: gl.GLuint, severity:
     std.log.info("{} {} {} {} {} : {s}", .{ source, _type, id, severity, length, message });
 }
 
-pub fn init(allocator: std.mem.Allocator, loadFunc: *const fn (void, [:0]const u8) ?gl.FunctionPointer) !void {
+pub fn init(allocator: std.mem.Allocator, loadFunc: *const fn (void, [:0]const u8) ?glFunctionPointer) !void {
     if (!__initialized) {
         try gl.load(void{}, loadFunc);
         gl.enable(gl.DEBUG_OUTPUT);
