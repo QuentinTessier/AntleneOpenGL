@@ -45,8 +45,8 @@ pub const ElementType = enum(u32) {
 
     pub fn getSize(self: ElementType) usize {
         return switch (self) {
-            ._16 => @sizeOf(u16),
-            ._32 => @sizeOf(u32),
+            ._u16 => @sizeOf(u16),
+            ._u32 => @sizeOf(u32),
         };
     }
 };

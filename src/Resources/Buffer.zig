@@ -69,7 +69,7 @@ pub fn typedInit(name: ?[]const u8, comptime T: type, data: ?[]const T, flags: B
     return buffer;
 }
 
-pub fn deinit(self: *Buffer) void {
+pub fn deinit(self: Buffer) void {
     if (self.mappedMemory) |_| {
         _ = gl.unmapNamedBuffer(self.handle);
     }
