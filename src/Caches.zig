@@ -32,9 +32,7 @@ pipelineCounter: u15 = 0,
 graphicPipelineCache: std.AutoHashMapUnmanaged(u16, GraphicPipeline) = .{},
 computePipelineCache: std.AutoHashMapUnmanaged(u16, ComputePipeline) = .{},
 vertexArrayObjectCache: std.AutoHashMapUnmanaged(u64, VertexArrayObject) = .{},
-samplerObjectCache: std.AutoHashMapUnmanaged(u64, SamplerObject) = .{},
-
-// TODO: Compute Pipeline
+samplerObjectCache: std.AutoArrayHashMapUnmanaged(u64, SamplerObject) = .{},
 
 pub fn init() Caches {
     return .{};
