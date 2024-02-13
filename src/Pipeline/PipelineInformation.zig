@@ -326,6 +326,8 @@ pub fn reflectInterface(allocator: std.mem.Allocator, program: u32, interface: g
 
             if (location >= 0) {
                 try resources.put(allocator, name, @intCast(location));
+            } else {
+                allocator.free(name);
             }
         }
     }

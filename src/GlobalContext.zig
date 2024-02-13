@@ -2,26 +2,27 @@ const std = @import("std");
 const gl = @import("gl4_6.zig");
 const Context = @import("Context.zig");
 
+const DebugMessenger = @import("./Debug/Messenger.zig");
+const DebugGroup = @import("./Debug/Group.zig");
+
 pub const glFunctionPointer = gl.FunctionPointer;
 pub const PipelineHandle = Context.PipelineHandle;
 pub const Texture = Context.Texture;
 pub const Sampler = @import("Resources/Sampler.zig");
 pub const Buffer = @import("Resources/Buffer.zig");
 
+pub const Tools = @import("Tools/ReflectShaderToStruct.zig");
+
 const PipelineInformation = @import("Pipeline/PipelineInformation.zig");
 
 var __initialized: bool = false;
 var __context: Context = undefined;
 
-fn messageCallback(source: gl.GLenum, _type: gl.GLenum, id: gl.GLuint, severity: gl.GLenum, length: gl.GLsizei, message: [*:0]const u8, _: ?*anyopaque) callconv(.C) void {
-    std.log.info("{} {} {} {} {} : {s}", .{ source, _type, id, severity, length, message });
-}
-
 pub fn init(allocator: std.mem.Allocator, comptime loadFunc: fn (void, [:0]const u8) ?glFunctionPointer) !void {
     if (!__initialized) {
         try gl.load(void{}, loadFunc);
         gl.enable(gl.DEBUG_OUTPUT);
-        gl.debugMessageCallback(messageCallback, null);
+        gl.debugMessageCallback(DebugMessenger.callback, null);
 
         __context = Context.init(allocator);
         __initialized = true;
@@ -51,11 +52,19 @@ pub const Resources = struct {
     pub fn CreateBuffer(name: ?[]const u8, data: ?[]const u8, flags: Buffer.BufferStorageFlags) Buffer {
         return Buffer.init(name, data, flags);
     }
+
+    pub inline fn CreateTypedBuffer(name: ?[]const u8, comptime T: type, data: ?[]const T, flags: Buffer.BufferStorageFlags) Buffer {
+        return Buffer.typedInit(name, T, data, flags);
+    }
 };
 
 pub const Rendering = struct {
     pub fn toSwapchain(info: Context.SwapchainRenderingInformation, pass: anytype) !void {
         try __context.renderToSwapchain(info, pass);
+    }
+
+    pub fn toFramebuffer(info: Context.FramebufferRenderingInformation, pass: anytype) !void {
+        try __context.renderToFramebuffer(info, pass);
     }
 };
 
@@ -74,6 +83,21 @@ pub const Commands = struct {
 
     pub fn BindSampledTexture(name: []const u8, texture: Texture, sampler: u64) !void {
         try __context.bindSampledTexture(name, texture, sampler);
+    }
+
+    pub fn BindReflectedSampledTexture(comptime ReflectedProgram: type, comptime tag: anytype, texture: Texture, sampler: u64) !void {
+        const name = @tagName(tag);
+        if (!@hasDecl(ReflectedProgram, name)) @panic("Trying to bind SampledTexture to reflected shader " ++ @typeName(ReflectedProgram) ++ ", " ++ name ++ " isn't defined.");
+
+        const sampler_object = try __context.getSampler(sampler);
+        try __context.bindSampledTextureBase(@field(ReflectedProgram, name), texture, sampler_object.handle);
+    }
+
+    pub fn BindReflectedTexture(comptime ReflectedProgram: type, comptime tag: anytype, texture: Texture) !void {
+        const name = @tagName(tag);
+        if (!@hasDecl(ReflectedProgram, name)) @panic("Trying to bind SampledTexture to reflected shader " ++ @typeName(ReflectedProgram) ++ ", " ++ name ++ " isn't defined.");
+
+        try __context.bindTextureBase(@field(ReflectedProgram, name), texture);
     }
 
     pub const BufferBindingInformation = union(enum(u32)) {

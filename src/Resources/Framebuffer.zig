@@ -1,25 +1,38 @@
 const std = @import("std");
 const gl = @import("../gl4_6.zig");
 
-const ColorAttachmentState = @import("Pipeline/PipelineInformation.zig").ColorAttachmentState;
+const Texture = @import("Texture.zig");
+
+const ColorAttachment = @import("../Context.zig").ColorAttachment;
+const PipelineInformation = @import("../Pipeline/PipelineInformation.zig");
 
 pub const Framebuffer = @This();
 
 handle: u32,
-textures: []u32,
-depthTexture: u32 = 0,
-stencilTexture: u32 = 0,
+colorAttachments: std.ArrayListUnmanaged(Texture) = .{},
+depthTexture: ?Texture = null,
+stencilTexture: ?Texture = null,
 
-pub fn init(allocator: std.mem.Allocator, attachments: []const ColorAttachmentState, width: u32, height: u32) !Framebuffer {
-    var handle: u32 = 0;
-    gl.createFramebuffers(1, @ptrCast(&handle));
+pub fn hash(colorAttachment: []const ColorAttachment, depth: ?Texture, stencil: ?Texture) u64 {
+    std.debug.assert(colorAttachment.len <= 8);
+    var handles: [10]u32 = [1]u32{0} ** 10;
 
-    const textures = try allocator.alloc(u32, attachments.len);
-    gl.createTextures(gl.TEXTURE_2D, @intCast(textures.len), textures.ptr);
-
-    for (textures, 0..) |texture, i| {
-        gl.bindTexture(gl.TEXTURE_2D, texture);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB32F, @intCast(width), @intCast(height), 0, gl.RGB, gl.FLOAT, null);
-        gl.framebufferTexture2D(gl.FRAMEBUFFER, @intCast(gl.COLOR_ATTACHMENT0 + i), gl.TEXTURE_2D, texture, 0);
+    for (colorAttachment, 0..) |attachment, index| {
+        handles[index] = attachment.texture.handle;
     }
+    if (depth) |texture| handles[8] = texture.handle;
+    if (stencil) |texture| handles[9] = texture.handle;
+
+    return std.hash.Murmur2_64.hash(std.mem.sliceAsBytes(&handles));
+}
+
+pub fn init(allocator: std.mem.Allocator, colorAttachment: []const ColorAttachment, depth: ?Texture, stencil: ?Texture) !Framebuffer {
+    var framebuffer: Framebuffer = undefined;
+    framebuffer.colorAttachments = .{};
+
+    for (colorAttachment) |attachment| {
+        framebuffer.colorAttachments.append(allocator, attachment.texture);
+    }
+    framebuffer.depthTexture = depth;
+    framebuffer.stencilTexture = stencil;
 }

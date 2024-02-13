@@ -115,15 +115,38 @@ pub fn init(info: TextureCreateInfo) Texture {
     var handle: u32 = 0;
     gl.createTextures(info.type.toGL(), 1, @ptrCast(&handle));
     switch (info.type) {
-        ._2D => gl.textureStorage2D(handle, @intCast(info.mipLevels), @intFromEnum(info.format), @intCast(info.extent.width), @intCast(info.extent.height)),
-        ._1DArray => gl.textureStorage2D(handle, @intCast(info.mipLevels), @intFromEnum(info.format), @intCast(info.extent.width), @intCast(info.extent.height)),
-        .cubeMap => gl.textureStorage2D(handle, @intCast(info.mipLevels), @intFromEnum(info.format), @intCast(info.extent.width), @intCast(info.extent.height)),
-        ._2DMultiSample => gl.textureStorage2DMultisample(handle, @intCast(info.mipLevels), @intFromEnum(info.format), @intCast(info.extent.width), @intCast(info.extent.height), gl.TRUE),
-
-        ._3D => gl.textureStorage3D(handle, @intCast(info.mipLevels), @intFromEnum(info.format), @intCast(info.extent.width), @intCast(info.extent.height), @intCast(info.extent.depth)),
-        ._2DArray => gl.textureStorage3D(handle, @intCast(info.mipLevels), @intFromEnum(info.format), @intCast(info.extent.width), @intCast(info.extent.height), @intCast(info.extent.depth)),
-        .cubeMapArray => gl.textureStorage3D(handle, @intCast(info.mipLevels), @intFromEnum(info.format), @intCast(info.extent.width), @intCast(info.extent.height), @intCast(info.extent.depth)),
-        ._3DMultiSample => gl.textureStorage3DMultisample(handle, @intCast(info.mipLevels), @intFromEnum(info.format), @intCast(info.extent.width), @intCast(info.extent.height), @intCast(info.extent.depth), gl.TRUE),
+        ._2D, ._1DArray, .cubeMap => gl.textureStorage2D(
+            handle,
+            @intCast(info.mipLevels),
+            @intFromEnum(info.format),
+            @intCast(info.extent.width),
+            @intCast(info.extent.height),
+        ),
+        ._2DMultiSample => gl.textureStorage2DMultisample(
+            handle,
+            @intCast(info.mipLevels),
+            @intFromEnum(info.format),
+            @intCast(info.extent.width),
+            @intCast(info.extent.height),
+            gl.TRUE,
+        ),
+        ._3D, ._2DArray, .cubeMapArray => gl.textureStorage3D(
+            handle,
+            @intCast(info.mipLevels),
+            @intFromEnum(info.format),
+            @intCast(info.extent.width),
+            @intCast(info.extent.height),
+            @intCast(info.extent.depth),
+        ),
+        ._3DMultiSample => gl.textureStorage3DMultisample(
+            handle,
+            @intCast(info.mipLevels),
+            @intFromEnum(info.format),
+            @intCast(info.extent.width),
+            @intCast(info.extent.height),
+            @intCast(info.extent.depth),
+            gl.TRUE,
+        ),
     }
 
     if (info.name) |name| {
@@ -136,44 +159,78 @@ pub fn init(info: TextureCreateInfo) Texture {
     };
 }
 
+pub const TextureInternalFormat = enum(u32) {
+    r = gl.RED,
+    rg = gl.RG,
+    rgb = gl.RGB,
+    rgba = gl.RGBA,
+    brga = gl.BRGA,
+    depth = gl.DEPTH_COMPONENT,
+    stencil = gl.STENCIL_INDEX,
+};
+
+pub const DataType = enum(u32) {
+    u8 = gl.UNSIGNED_BYTE,
+    i8 = gl.BYTE,
+    u16 = gl.UNSIGNED_SHORT,
+    i16 = gl.SHORT,
+    u32 = gl.UNSIGNED_INT,
+    i32 = gl.INT,
+    f32 = gl.FLOAT,
+    u8_3_3_2 = gl.UNSIGNED_BYTE_3_3_2,
+    u8_2_3_3 = gl.UNSIGNED_BYTE_2_3_3_REV,
+    u16_5_6_5 = gl.UNSIGNED_SHORT_5_6_5,
+    u16_5_6_5_rev = gl.UNSIGNED_SHORT_5_6_5_REV,
+    u16_4_4_4_4 = gl.UNSIGNED_SHORT_4_4_4_4,
+    u16_4_4_4_4_rev = gl.UNSIGNED_SHORT_4_4_4_4_REV,
+    u16_5_5_5_1 = gl.UNSIGNED_SHORT_5_5_5_1,
+    u16_1_5_5_5 = gl.UNSIGNED_SHORT_1_5_5_5_REV,
+    u32_8_8_8_8 = gl.UNSIGNED_INT_8_8_8_8,
+    u32_8_8_8_8_rev = gl.UNSIGNED_INT_8_8_8_8_REV,
+    u32_10_10_10_2 = gl.UNSIGNED_INT_10_10_10_2,
+    u32_2_10_10_10 = gl.UNSIGNED_INT_2_10_10_10_REV,
+};
+
 pub const TextureUpdateInformation = struct {
     level: u32 = 0,
     extent: Extent(u32),
     offset: Extent(u32) = .{ .width = 0, .height = 0, .depth = 0 },
-    format: u32, // TODO: Use enums
-    type: u32,
+    format: TextureInternalFormat, // TODO: Use enums
+    type: DataType,
     data: []const u8,
 };
 
 pub fn update(self: Texture, info: TextureUpdateInformation) void {
     gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
     gl.pixelStorei(gl.PACK_ALIGNMENT, 1);
-    gl.textureSubImage2D(
-        self.handle,
-        @intCast(info.level),
-        0,
-        0,
-        @intCast(info.extent.width),
-        @intCast(info.extent.height),
-        gl.RGB,
-        gl.UNSIGNED_BYTE,
-        info.data.ptr,
-    );
+    switch (self.createInfo.type) {
+        ._2D, ._1DArray, .cubeMap => gl.textureSubImage2D(
+            self.handle,
+            @intCast(info.level),
+            0,
+            0,
+            @intCast(info.extent.width),
+            @intCast(info.extent.height),
+            @intFromEnum(info.format),
+            @intFromEnum(info.type),
+            info.data.ptr,
+        ),
+        ._3D, ._2DArray, .cubeMapArray => gl.textureSubImage3D(
+            self.handle,
+            @intCast(info.level),
+            @intCast(info.offset.width),
+            @intCast(info.offset.height),
+            @intCast(info.offset.depth),
+            @intCast(info.extent.width),
+            @intCast(info.extent.height),
+            @intCast(info.extent.depth),
+            @intFromEnum(info.format),
+            @intFromEnum(info.type),
+            info.data.ptr,
+        ),
 
-    //switch (self.createInfo.type) {
-    //    ._2D => gl.textureSubImage2D(
-    //        self.handle,
-    //        @intCast(info.level),
-    //        0,
-    //        0,
-    //        @intCast(info.extent.width),
-    //        @intCast(info.extent.height),
-    //        gl.RGB,
-    //        gl.UNSIGNED_BYTE,
-    //        info.data.ptr,
-    //    ),
-    //    else => @panic("Unsupported"),
-    //}
+        else => @panic("Texture type not supported yet"),
+    }
 }
 
 pub fn deinit(self: Texture) void {

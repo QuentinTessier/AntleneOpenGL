@@ -9,6 +9,7 @@ pub const Buffer = @import("Resources/Buffer.zig");
 pub const SamplerObject = @import("Resources/Sampler.zig");
 pub const Texture = @import("Resources/Texture.zig");
 pub const VertexArrayObject = @import("Resources/VertexArrayObject.zig");
+pub const Framebuffer = @import("Resources/Framebuffer.zig");
 
 const Sampler = @import("./Resources/Sampler.zig");
 

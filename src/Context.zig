@@ -28,9 +28,14 @@ pub const SwapchainRenderingInformation = struct {
     clearStencilValue: u32 = 0,
 };
 
+pub const ColorAttachment = struct {
+    texture: Texture,
+    colorLoadOp: AttachementLoadOp = .keep,
+    clearColor: @Vector(4, f32) = .{ 0.0, 0.0, 0.0, 1.0 },
+};
+
 pub const FramebufferRenderingInformation = struct {
-    colorLoadOp: []const AttachementLoadOp,
-    clearColor: []const @Vector(4, f32),
+    colorAttachments: []const ColorAttachment,
 
     depthLoadOp: AttachementLoadOp = .keep,
     clearDepthValue: f32 = 0.0,
@@ -40,13 +45,13 @@ pub const FramebufferRenderingInformation = struct {
 };
 
 pub const ElementType = enum(u32) {
-    _u16 = gl.UNSIGNED_SHORT,
-    _u32 = gl.UNSIGNED_INT,
+    u16 = gl.UNSIGNED_SHORT,
+    u32 = gl.UNSIGNED_INT,
 
     pub fn getSize(self: ElementType) usize {
         return switch (self) {
-            ._u16 => @sizeOf(u16),
-            ._u32 => @sizeOf(u32),
+            .u16 => @sizeOf(u16),
+            .u32 => @sizeOf(u32),
         };
     }
 };
@@ -60,7 +65,7 @@ pipelineDebugGroupPushed: bool = false,
 currentTopology: PrimitiveTopology = .triangle,
 currentVertexArrayObjectHash: u64 = undefined,
 currentVertexArrayObject: VertexArrayObject = undefined,
-currentElementType: ElementType = ._u16,
+currentElementType: ElementType = .u16,
 lastDepthMask: bool = true,
 lastStencilWriteMask: [2]i32 = .{ -1, -1 },
 lastColorMask: [8]ColorComponentFlags = undefined,
@@ -106,6 +111,8 @@ pub fn renderToSwapchain(_: *Context, info: SwapchainRenderingInformation, pass:
     }
     try @call(.auto, T.execute, .{pass});
 }
+
+    //pub fn renderToFramebuffer(_: *Context, info: FramebufferRenderingInformation, pass: anytype) !void {}
 
 pub fn bindGraphicPipeline(self: *Context, pipeline: Caches.PipelineHandle) !void {
     std.debug.assert(pipeline.type == .Graphics);
@@ -165,11 +172,13 @@ pub fn bindComputePipeline(self: *Context, pipeline: Caches.PipelineHandle) !voi
     }
 }
 
-pub fn bindTextureBase(_: *Context, index: u32, texture: Texture, sampler: ?u32) void {
+pub fn bindTextureBase(_: *Context, index: u32, texture: Texture) void {
     gl.bindTextureUnit(index, texture.handle);
-    if (sampler) |s| {
-        gl.bindSampler(index, s);
-    }
+}
+
+pub fn bindSampledTextureBase(_: *Context, index: u32, texture: Texture, s: u32) void {
+    gl.bindTextureUnit(index, texture.handle);
+    gl.bindSampler(index, s);
 }
 
 pub fn bindTexture(self: *Context, name: []const u8, texture: Texture) !void {
@@ -193,7 +202,7 @@ pub fn bindTexture(self: *Context, name: []const u8, texture: Texture) !void {
         std.log.err("Failed to find texture binding point named: {s}", .{name});
         return error.NoNamedTextureBinding;
     };
-    self.bindTextureBase(binding, texture, null);
+    self.bindTextureBase(binding, texture);
 }
 
 pub fn bindSampledTexture(self: *Context, name: []const u8, texture: Texture, sampler: u64) !void {
@@ -218,5 +227,9 @@ pub fn bindSampledTexture(self: *Context, name: []const u8, texture: Texture, sa
         return error.NoNamedTextureBinding;
     };
     const s = self.caches.samplerObjectCache.get(sampler) orelse return error.MissingSampler;
-    self.bindTextureBase(binding, texture, s.handle);
+    self.bindSampledTextureBase(binding, texture, s.handle);
+}
+
+pub fn getSampler(self: *Context, sampler: u64) !Caches.SamplerObject {
+    return self.caches.samplerObjectCache.get(sampler) orelse error.MissingSampler;
 }
