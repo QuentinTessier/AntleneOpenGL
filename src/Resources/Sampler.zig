@@ -3,6 +3,12 @@ const gl = @import("../gl4_6.zig");
 pub const Sampler = @This();
 
 handle: u32,
+hash: u64,
+
+pub inline fn hash(state: SamplerState) u64 {
+    const bytes = std.mem.asBytes(&state);
+    return std.hash.Murmur2_64.hash(bytes);
+}
 
 pub fn init(state: SamplerState) Sampler {
     var handle: u32 = 0;
@@ -27,7 +33,10 @@ pub fn init(state: SamplerState) Sampler {
             gl.samplerParameteriv(handle, gl.TEXTURE_BORDER_COLOR, (&color).ptr);
         },
     }
-    return .{ .handle = handle };
+    return .{
+        .handle = handle,
+        .hash = hash(state),
+    };
 }
 
 pub fn deinit(self: Sampler) void {
@@ -66,8 +75,3 @@ pub const SamplerState = struct {
         .float = .{ 0, 0, 0, 1 },
     },
 };
-
-pub fn hash(state: SamplerState) u64 {
-    const bytes = std.mem.asBytes(&state);
-    return std.hash.Murmur2_64.hash(bytes);
-}

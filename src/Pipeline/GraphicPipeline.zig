@@ -2,6 +2,8 @@ const std = @import("std");
 const gl = @import("../gl4_6.zig");
 const Information = @import("./PipelineInformation.zig");
 
+const VertexArrayObject = @import("../Resources/VertexArrayObject.zig");
+
 pub const GraphicPipelineInformation = Information.GraphicPipelineInformation;
 
 pub const Handle = u32;
@@ -9,7 +11,8 @@ pub const Handle = u32;
 pub const GraphicPipeline = @This();
 
 handle: Handle,
-vaoHash: u64,
+hash: u64,
+vao: VertexArrayObject,
 
 inputAssemblyState: Information.PipelineInputAssemblyState,
 vertexInputState: Information.PipelineVertexInputState,
@@ -23,7 +26,54 @@ uniformBlocks: std.StringArrayHashMapUnmanaged(Handle) = .{},
 shaderStorageBlocks: std.StringArrayHashMapUnmanaged(Handle) = .{},
 samplers: std.StringArrayHashMapUnmanaged(Handle) = .{},
 
-pub fn init(allocator: std.mem.Allocator, info: GraphicPipelineInformation) !GraphicPipeline {
+// Try to create all pipeline up-front, since we need to alloc to generate the hash.
+// We needs a better way to create a repeatable id or something of the sort.
+pub inline fn hash(allocator: std.mem.Allocator, info: GraphicPipelineInformation) !u64 {
+    const size =
+        @sizeOf(Information.PipelineInputAssemblyState) +
+        @sizeOf(Information.PipelineRasterizationState) +
+        @sizeOf(Information.PipelineMultisampleState) +
+        @sizeOf(Information.PipelineDepthState) +
+        @sizeOf(Information.PipelineStencilState) +
+        @sizeOf(Information.PipelineColorBlendState) +
+        @sizeOf(Information.VertexInputAttributeDescription) * info.vertexInputState.vertexAttributeDescription.len +
+        info.vertexShaderSource.len() + info.fragmentShaderSource.len();
+
+    const buffer = try allocator.alloc(u8, size);
+    defer allocator.free(buffer);
+    var offset: usize = 0;
+
+    @memcpy(buffer[0..@sizeOf(Information.PipelineInputAssemblyState)], std.mem.asBytes(&info.inputAssemblyState));
+    offset += @sizeOf(Information.PipelineInputAssemblyState);
+
+    @memcpy(buffer[offset .. offset + @sizeOf(Information.VertexInputAttributeDescription) * info.vertexInputState.vertexAttributeDescription.len], std.mem.sliceAsBytes(info.vertexInputState.vertexAttributeDescription));
+    offset += @sizeOf(Information.VertexInputAttributeDescription) * info.vertexInputState.vertexAttributeDescription.len;
+
+    @memcpy(buffer[offset .. offset + @sizeOf(Information.PipelineRasterizationState)], std.mem.asBytes(&info.rasterizationState));
+    offset += @sizeOf(Information.PipelineRasterizationState);
+
+    @memcpy(buffer[offset .. offset + @sizeOf(Information.PipelineMultisampleState)], std.mem.asBytes(&info.multiSampleState));
+    offset += @sizeOf(Information.PipelineMultisampleState);
+
+    @memcpy(buffer[offset .. offset + @sizeOf(Information.PipelineDepthState)], std.mem.asBytes(&info.depthState));
+    offset += @sizeOf(Information.PipelineDepthState);
+
+    @memcpy(buffer[offset .. offset + @sizeOf(Information.PipelineStencilState)], std.mem.asBytes(&info.stencilState));
+    offset += @sizeOf(Information.PipelineStencilState);
+
+    @memcpy(buffer[offset .. offset + @sizeOf(Information.PipelineColorBlendState)], std.mem.asBytes(&info.colorBlendState));
+    offset += @sizeOf(Information.PipelineColorBlendState);
+
+    @memcpy(buffer[offset .. offset + info.vertexShaderSource.len()], info.vertexShaderSource.slice());
+    offset += info.vertexShaderSource.len();
+
+    @memcpy(buffer[offset .. offset + info.fragmentShaderSource.len()], info.fragmentShaderSource.slice());
+    offset += info.fragmentShaderSource.len();
+
+    return std.hash.Murmur2_64.hash(buffer);
+}
+
+pub fn init(allocator: std.mem.Allocator, info: GraphicPipelineInformation, vao: VertexArrayObject) !GraphicPipeline {
     const vertex_shader = try Information.compileShader(gl.VERTEX_SHADER, info.vertexShaderSource);
     errdefer gl.deleteShader(vertex_shader);
     const fragment_shader = try Information.compileShader(gl.FRAGMENT_SHADER, info.fragmentShaderSource);
@@ -39,7 +89,8 @@ pub fn init(allocator: std.mem.Allocator, info: GraphicPipelineInformation) !Gra
 
     return .{
         .handle = program,
-        .vaoHash = 0,
+        .hash = try hash(allocator, info),
+        .vao = vao,
         .inputAssemblyState = info.inputAssemblyState,
         .vertexInputState = info.vertexInputState,
         .rasterizationState = info.rasterizationState,

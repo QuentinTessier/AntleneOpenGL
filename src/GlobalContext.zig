@@ -6,8 +6,9 @@ const DebugMessenger = @import("./Debug/Messenger.zig");
 const DebugGroup = @import("./Debug/Group.zig");
 
 pub const glFunctionPointer = gl.FunctionPointer;
-pub const PipelineHandle = Context.PipelineHandle;
 pub const Texture = Context.Texture;
+pub const GraphicPipeline = @import("Pipeline/GraphicPipeline.zig");
+pub const ComputePipeline = @import("Pipeline/ComputePipeline.zig");
 pub const Sampler = @import("Resources/Sampler.zig");
 pub const Buffer = @import("Resources/Buffer.zig");
 
@@ -35,9 +36,8 @@ pub fn deinit() void {
 }
 
 pub const Resources = struct {
-    pub fn CreateGraphicPipeline(info: PipelineInformation.GraphicPipelineInformation) !PipelineHandle {
-        const p = try __context.caches.createGraphicPipeline(__context.allocator, info);
-        return p;
+    pub fn CreateGraphicPipeline(info: PipelineInformation.GraphicPipelineInformation) !Context.GraphicPipeline {
+        return __context.caches.createGraphicPipeline(__context.allocator, info);
     }
 
     pub fn CreateTexture(info: Texture.TextureCreateInfo) Texture {
@@ -69,12 +69,12 @@ pub const Rendering = struct {
 };
 
 pub const Commands = struct {
-    pub fn BindGraphicPipeline(handle: PipelineHandle) !void {
-        try __context.bindGraphicPipeline(handle);
+    pub fn BindGraphicPipeline(pipeline: Context.GraphicPipeline) void {
+        __context.bindGraphicPipeline(pipeline);
     }
 
-    pub fn BindComputePipeline(handle: PipelineHandle) !void {
-        try __context.bindComputePipeline(handle);
+    pub fn BindComputePipeline(pipeline: Context.ComputePipeline) void {
+        __context.bindComputePipeline(pipeline);
     }
 
     pub fn BindTexture(name: []const u8, texture: Texture) !void {
@@ -124,7 +124,7 @@ pub const Commands = struct {
 
     pub fn BindVertexBuffer(binding: u32, buffer: Buffer, offset: usize, stride: usize) void {
         gl.vertexArrayVertexBuffer(
-            __context.currentVertexArrayObject.handle,
+            __context.bondVertexArrayObject.handle,
             binding,
             buffer.handle,
             @intCast(offset),
@@ -139,7 +139,7 @@ pub const Commands = struct {
             buffers_handles[i] = b.handle;
         }
         gl.vertexArrayVertexBuffers(
-            __context.currentVertexArrayObject.handle,
+            __context.bondVertexArrayObject.handle,
             binding,
             @intCast(buffers.len),
             (&buffers_handles).ptr,
@@ -149,7 +149,7 @@ pub const Commands = struct {
     }
 
     pub fn BindIndexBuffer(buffer: Buffer, element_type: Context.ElementType) void {
-        gl.vertexArrayElementBuffer(__context.currentVertexArrayObject.handle, buffer.handle);
+        gl.vertexArrayElementBuffer(__context.bondVertexArrayObject.handle, buffer.handle);
         __context.currentElementType = element_type;
     }
 

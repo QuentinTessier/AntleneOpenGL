@@ -5,6 +5,7 @@ const PipelineVertexInputState = @import("../Pipeline/PipelineInformation.zig").
 const VertexArrayObject = @This();
 
 handle: u32,
+hash: u64,
 
 pub inline fn hash(vertexInputState: PipelineVertexInputState) u64 {
     const bytes = std.mem.sliceAsBytes(vertexInputState.vertexAttributeDescription);
@@ -24,13 +25,10 @@ pub fn init(vertexInputState: PipelineVertexInputState) VertexArrayObject {
 
     return .{
         .handle = vertexArrayObject,
+        .hash = hash(vertexInputState),
     };
 }
 
 pub inline fn deinit(self: VertexArrayObject) void {
     gl.deleteVertexArrays(1, @ptrCast(&self.handle));
-}
-
-pub inline fn bind(self: VertexArrayObject) void {
-    gl.bindVertexArray(self.handle);
 }

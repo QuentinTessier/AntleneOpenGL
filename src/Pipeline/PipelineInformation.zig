@@ -199,7 +199,21 @@ pub const PipelineColorBlendState = struct {
 
 pub const ShaderSource = union(enum(u32)) {
     glsl: []const u8,
-    spriv: []const u8,
+    spirv: []const u8,
+
+    pub fn len(self: ShaderSource) usize {
+        return switch (self) {
+            .glsl => |glsl| glsl.len,
+            .spirv => |spirv| spirv.len,
+        };
+    }
+
+    pub fn slice(self: ShaderSource) []const u8 {
+        return switch (self) {
+            .glsl => |glsl| glsl,
+            .spirv => |spirv| spirv,
+        };
+    }
 };
 
 pub const GraphicPipelineInformation = struct {
@@ -226,7 +240,7 @@ pub const ComputePipelineInformation = struct {
 pub fn compileShader(stage: u32, source: ShaderSource) !u32 {
     const shader = gl.createShader(stage);
     switch (source) {
-        .spriv => |spirv| {
+        .spirv => |spirv| {
             gl.shaderBinary(
                 1,
                 @ptrCast(&shader),

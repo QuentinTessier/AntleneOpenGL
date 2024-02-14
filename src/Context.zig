@@ -4,7 +4,7 @@ const Caches = @import("Caches.zig");
 
 pub const VertexArrayObject = @import("Resources/VertexArrayObject.zig");
 pub const GraphicPipeline = @import("Pipeline/GraphicPipeline.zig");
-pub const PipelineHandle = Caches.PipelineHandle;
+pub const ComputePipeline = @import("Pipeline/ComputePipeline.zig");
 const PrimitiveTopology = @import("Pipeline/PipelineInformation.zig").PrimitiveTopology;
 const ColorComponentFlags = @import("Pipeline/PipelineInformation.zig").ColorComponentFlags;
 pub const Texture = @import("Resources/Texture.zig");
@@ -56,15 +56,24 @@ pub const ElementType = enum(u32) {
     }
 };
 
+const PipelineType = enum {
+    Compute,
+    Graphics,
+};
+
+const Pipeline = union(PipelineType) {
+    Compute: ComputePipeline,
+    Graphics: GraphicPipeline,
+};
+
 allocator: std.mem.Allocator,
 caches: Caches = .{},
 
-previousPipeline: Caches.PipelineHandle = .{ .type = .Compute, .id = std.math.maxInt(u15) },
+previousPipeline: ?Pipeline = null,
 pipelineDebugGroupPushed: bool = false,
 
 currentTopology: PrimitiveTopology = .triangle,
-currentVertexArrayObjectHash: u64 = undefined,
-currentVertexArrayObject: VertexArrayObject = undefined,
+bondVertexArrayObject: VertexArrayObject = undefined,
 currentElementType: ElementType = .u16,
 lastDepthMask: bool = true,
 lastStencilWriteMask: [2]i32 = .{ -1, -1 },
@@ -112,64 +121,72 @@ pub fn renderToSwapchain(_: *Context, info: SwapchainRenderingInformation, pass:
     try @call(.auto, T.execute, .{pass});
 }
 
-    //pub fn renderToFramebuffer(_: *Context, info: FramebufferRenderingInformation, pass: anytype) !void {}
+pub fn bindGraphicPipeline(self: *Context, pipeline: GraphicPipeline) void {
+    if (self.previousPipeline) |previousPipeline| {
+        switch (previousPipeline) {
+            .Compute => {
+                gl.useProgram(pipeline.handle);
 
-pub fn bindGraphicPipeline(self: *Context, pipeline: Caches.PipelineHandle) !void {
-    std.debug.assert(pipeline.type == .Graphics);
-
-    const current = self.caches.graphicPipelineCache.get(pipeline.toU16()) orelse return error.InvalidPipelineHandle;
-    const previous = self.caches.graphicPipelineCache.get(self.previousPipeline.toU16());
-
-    if (self.previousPipeline.type == .Compute or self.previousPipeline.id != pipeline.id) {
-        gl.useProgram(current.handle);
-    }
-
-    if (self.previousPipeline.toU16() == pipeline.toU16()) return;
-
-    // TODO: Push debug group
-
-    if (previous == null) {
-        gl.enable(gl.FRAMEBUFFER_SRGB);
-    }
-
-    if (previous == null or current.inputAssemblyState.enableRestart != previous.?.inputAssemblyState.enableRestart) {
-        if (current.inputAssemblyState.enableRestart) gl.enable(gl.PRIMITIVE_RESTART_FIXED_INDEX) else gl.disable(gl.PRIMITIVE_RESTART_FIXED_INDEX);
-    }
-    self.currentTopology = current.inputAssemblyState.topology;
-
-    // TODO: Multisampling state
-    if (previous) |previous_pipeline| {
-        GraphicPipeline.updateInputAssemblyState(current.inputAssemblyState, previous_pipeline.inputAssemblyState);
-        GraphicPipeline.updateRasterizationState(current.rasterizationState, previous_pipeline.rasterizationState);
-        GraphicPipeline.updateDepthState(current.depthState, previous_pipeline.depthState, &self.lastDepthMask);
-        GraphicPipeline.updateStencilState(current.stencilState, previous_pipeline.stencilState, &self.lastStencilWriteMask);
-        GraphicPipeline.updateColorBlendState(current.colorBlendState, previous_pipeline.colorBlendState, &self.lastColorMask);
+                GraphicPipeline.updateInputAssemblyState(pipeline.inputAssemblyState, null);
+                GraphicPipeline.updateRasterizationState(pipeline.rasterizationState, null);
+                GraphicPipeline.updateDepthState(pipeline.depthState, null, &self.lastDepthMask);
+                GraphicPipeline.updateStencilState(pipeline.stencilState, null, &self.lastStencilWriteMask);
+                GraphicPipeline.updateColorBlendState(pipeline.colorBlendState, null, &self.lastColorMask);
+                self.currentTopology = pipeline.inputAssemblyState.topology;
+                if (self.bondVertexArrayObject.hash != pipeline.vao.hash) {
+                    gl.bindVertexArray(pipeline.vao.handle);
+                    self.bondVertexArrayObject = pipeline.vao;
+                }
+            },
+            .Graphics => |previous| {
+                if (pipeline.hash == previous.hash) {
+                    return;
+                } else {
+                    gl.useProgram(pipeline.handle);
+                }
+                GraphicPipeline.updateInputAssemblyState(pipeline.inputAssemblyState, previous.inputAssemblyState);
+                GraphicPipeline.updateRasterizationState(pipeline.rasterizationState, previous.rasterizationState);
+                GraphicPipeline.updateDepthState(pipeline.depthState, previous.depthState, &self.lastDepthMask);
+                GraphicPipeline.updateStencilState(pipeline.stencilState, previous.stencilState, &self.lastStencilWriteMask);
+                GraphicPipeline.updateColorBlendState(pipeline.colorBlendState, previous.colorBlendState, &self.lastColorMask);
+                self.currentTopology = pipeline.inputAssemblyState.topology;
+                if (self.bondVertexArrayObject.hash != pipeline.vao.hash) {
+                    gl.bindVertexArray(pipeline.vao.handle);
+                    self.bondVertexArrayObject = pipeline.vao;
+                }
+            },
+        }
     } else {
-        GraphicPipeline.updateInputAssemblyState(current.inputAssemblyState, null);
-        GraphicPipeline.updateRasterizationState(current.rasterizationState, null);
-        GraphicPipeline.updateDepthState(current.depthState, null, &self.lastDepthMask);
-        GraphicPipeline.updateStencilState(current.stencilState, null, &self.lastStencilWriteMask);
-        GraphicPipeline.updateColorBlendState(current.colorBlendState, null, &self.lastColorMask);
+        gl.useProgram(pipeline.handle);
+        gl.enable(gl.FRAMEBUFFER_SRGB);
+        GraphicPipeline.updateInputAssemblyState(pipeline.inputAssemblyState, null);
+        GraphicPipeline.updateRasterizationState(pipeline.rasterizationState, null);
+        GraphicPipeline.updateDepthState(pipeline.depthState, null, &self.lastDepthMask);
+        GraphicPipeline.updateStencilState(pipeline.stencilState, null, &self.lastStencilWriteMask);
+        GraphicPipeline.updateColorBlendState(pipeline.colorBlendState, null, &self.lastColorMask);
+        self.currentTopology = pipeline.inputAssemblyState.topology;
+        gl.bindVertexArray(pipeline.vao.handle);
+        self.bondVertexArrayObject = pipeline.vao;
     }
-    self.currentTopology = current.inputAssemblyState.topology;
-
-    if (current.vaoHash != self.currentVertexArrayObjectHash) {
-        const vao = self.caches.vertexArrayObjectCache.get(current.vaoHash) orelse return error.MissingVertexArrayObject;
-        gl.bindVertexArray(vao.handle);
-        self.currentVertexArrayObjectHash = current.vaoHash;
-        self.currentVertexArrayObject = vao;
-    }
-
-    self.previousPipeline = pipeline;
+    self.previousPipeline = .{ .Graphics = pipeline };
 }
 
-pub fn bindComputePipeline(self: *Context, pipeline: Caches.PipelineHandle) !void {
-    std.debug.assert(pipeline.type == .Compute);
-
-    const current = self.caches.computePipelineCache.get(pipeline.toU16()) orelse return error.InvalidPipelineHandle;
-    if (self.previousPipeline.type == .Graphics or self.previousPipeline.id != pipeline.id) {
-        gl.useProgram(current.handle);
+pub fn bindComputePipeline(self: *Context, pipeline: ComputePipeline) void {
+    if (self.previousPipeline) |previousPipeline| {
+        switch (previousPipeline) {
+            .Compute => |previous| {
+                if (pipeline.hash == previous.hash) {
+                    return;
+                } else {
+                    gl.useProgram(pipeline.handle);
+                }
+            },
+            .Graphics => gl.useProgram(pipeline.handle),
+        }
+    } else {
+        gl.useProgram(pipeline.handle);
     }
+    self.previousPipeline = .{ .Compute = pipeline };
 }
 
 pub fn bindTextureBase(_: *Context, index: u32, texture: Texture) void {
