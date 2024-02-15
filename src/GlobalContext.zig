@@ -1,5 +1,5 @@
 const std = @import("std");
-const gl = @import("gl4_6.zig");
+pub const gl = @import("gl4_6.zig");
 const Context = @import("Context.zig");
 
 const DebugMessenger = @import("./Debug/Messenger.zig");

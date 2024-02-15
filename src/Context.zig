@@ -17,15 +17,31 @@ pub const AttachementLoadOp = enum(u32) {
     dontCare,
 };
 
+pub const DepthRange = enum(u32) {
+    NegativeOneToOne = gl.NEGATIVE_ONE_TO_ONE,
+    ZeroToOne = gl.ZERO_TO_ONE,
+};
+
+pub const Viewport = struct {
+    extent: struct {
+        x: u32,
+        y: u32,
+        width: u32,
+        height: u32,
+    },
+    minDepth: f32 = 0.0,
+    maxDepth: f32 = 1.0,
+    depthRange: DepthRange = .NegativeOneToOne,
+};
+
 pub const SwapchainRenderingInformation = struct {
     colorLoadOp: AttachementLoadOp = .keep,
     clearColor: @Vector(4, f32) = .{ 0.0, 0.0, 0.0, 1.0 },
-
     depthLoadOp: AttachementLoadOp = .keep,
     clearDepthValue: f32 = 0.0,
-
     stencilLoadOp: AttachementLoadOp = .keep,
     clearStencilValue: u32 = 0,
+    viewport: Viewport,
 };
 
 pub const ColorAttachment = struct {
@@ -79,6 +95,8 @@ lastDepthMask: bool = true,
 lastStencilWriteMask: [2]i32 = .{ -1, -1 },
 lastColorMask: [8]ColorComponentFlags = undefined,
 
+previousViewport: ?Viewport = null,
+
 pub fn init(allocator: std.mem.Allocator) Context {
     return .{
         .allocator = allocator,
@@ -101,7 +119,7 @@ fn glEnableOrDisable(option: gl.GLenum, b: bool) void {
     }
 }
 
-pub fn renderToSwapchain(_: *Context, info: SwapchainRenderingInformation, pass: anytype) !void {
+pub fn renderToSwapchain(self: *Context, info: SwapchainRenderingInformation, pass: anytype) !void {
     const T: type = @TypeOf(pass);
     comptime {
         if (@typeInfo(T) != .Struct or !@hasDecl(T, "execute")) {
@@ -118,6 +136,19 @@ pub fn renderToSwapchain(_: *Context, info: SwapchainRenderingInformation, pass:
             gl.invalidateFramebuffer(0, 1, @ptrCast(&value));
         },
     }
+    switch (info.depthLoadOp) {
+        .keep => {},
+        .clear => {
+            gl.clearNamedFramebufferfv(0, gl.DEPTH, 0, @ptrCast(&info.clearColor));
+        },
+        .dontCare => {
+            const value: u32 = gl.DEPTH;
+            gl.invalidateFramebuffer(0, 1, @ptrCast(&value));
+        },
+    }
+
+    self.updateViewport(info.viewport);
+
     try @call(.auto, T.execute, .{pass});
 }
 
@@ -249,4 +280,37 @@ pub fn bindSampledTexture(self: *Context, name: []const u8, texture: Texture, sa
 
 pub fn getSampler(self: *Context, sampler: u64) !Caches.SamplerObject {
     return self.caches.samplerObjectCache.get(sampler) orelse error.MissingSampler;
+}
+
+pub fn updateViewport(self: *Context, viewport: Viewport) void {
+    if (self.previousViewport) |*previousViewport| {
+        if (!std.mem.eql(u8, std.mem.asBytes(&previousViewport.extent), std.mem.asBytes(&viewport.extent))) {
+            gl.viewport(
+                @intCast(viewport.extent.x),
+                @intCast(viewport.extent.y),
+                @intCast(viewport.extent.width),
+                @intCast(viewport.extent.height),
+            );
+            self.previousViewport.?.extent = viewport.extent;
+        }
+        if (previousViewport.maxDepth != viewport.maxDepth or previousViewport.minDepth != viewport.minDepth) {
+            gl.depthRangef(viewport.minDepth, viewport.maxDepth);
+            previousViewport.maxDepth = viewport.maxDepth;
+            previousViewport.minDepth = viewport.minDepth;
+        }
+        if (previousViewport.depthRange != viewport.depthRange) {
+            gl.clipControl(gl.LOWER_LEFT, @intFromEnum(viewport.depthRange));
+            previousViewport.depthRange = viewport.depthRange;
+        }
+    } else {
+        gl.viewport(
+            @intCast(viewport.extent.x),
+            @intCast(viewport.extent.y),
+            @intCast(viewport.extent.width),
+            @intCast(viewport.extent.height),
+        );
+        //gl.depthRangef(viewport.minDepth, viewport.maxDepth);
+        //gl.clipControl(gl.LOWER_LEFT, @intFromEnum(viewport.depthRange));
+        self.previousViewport = viewport;
+    }
 }

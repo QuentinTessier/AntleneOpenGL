@@ -87,9 +87,11 @@ pub fn init(allocator: std.mem.Allocator, info: GraphicPipelineInformation, vao:
         }
     }
 
+    const h = try hash(allocator, info);
+    std.log.info("Created new pipeline with hash {}", .{h});
     return .{
         .handle = program,
-        .hash = try hash(allocator, info),
+        .hash = h,
         .vao = vao,
         .inputAssemblyState = info.inputAssemblyState,
         .vertexInputState = info.vertexInputState,
@@ -226,6 +228,7 @@ pub fn updateDepthState(self: Information.PipelineDepthState, other: ?Informatio
         }
     } else {
         glEnableOrDisable(gl.DEPTH_TEST, self.depthTestEnable);
+        gl.depthFunc(@intFromEnum(self.depthCompareOp));
         if (self.depthWriteEnable != lastDepthMask.*) {
             gl.depthMask(if (self.depthWriteEnable) gl.TRUE else gl.FALSE);
             lastDepthMask.* = self.depthWriteEnable;
