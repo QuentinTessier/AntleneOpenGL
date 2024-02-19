@@ -8,6 +8,8 @@ pub const ComputePipeline = @import("Pipeline/ComputePipeline.zig");
 const PrimitiveTopology = @import("Pipeline/PipelineInformation.zig").PrimitiveTopology;
 const ColorComponentFlags = @import("Pipeline/PipelineInformation.zig").ColorComponentFlags;
 pub const Texture = @import("Resources/Texture.zig");
+pub const Extent = Texture.Extent;
+pub const Framebuffer = @import("Resources/Framebuffer.zig");
 
 pub const Context = @This();
 
@@ -45,12 +47,17 @@ pub const SwapchainRenderingInformation = struct {
 };
 
 pub const ColorAttachment = struct {
-    texture: Texture,
     colorLoadOp: AttachementLoadOp = .keep,
-    clearColor: @Vector(4, f32) = .{ 0.0, 0.0, 0.0, 1.0 },
+    clearColor: union(enum(u32)) {
+        f32: @Vector(4, f32),
+        i32: @Vector(4, i32),
+        u32: @Vector(4, u32),
+    } = .{ .f32 = .{ 0.0, 0.0, 0.0, 1.0 } },
 };
 
 pub const FramebufferRenderingInformation = struct {
+    framebuffer: Framebuffer,
+
     colorAttachments: []const ColorAttachment,
 
     depthLoadOp: AttachementLoadOp = .keep,
@@ -58,6 +65,7 @@ pub const FramebufferRenderingInformation = struct {
 
     stencilLoadOp: AttachementLoadOp = .keep,
     clearStencilValue: u32 = 0,
+    viewport: Viewport,
 };
 
 pub const ElementType = enum(u32) {
@@ -122,13 +130,17 @@ fn glEnableOrDisable(option: gl.GLenum, b: bool) void {
 pub fn renderToSwapchain(self: *Context, info: SwapchainRenderingInformation, pass: anytype) !void {
     const T: type = @TypeOf(pass);
     comptime {
-        if (@typeInfo(T) != .Struct or !@hasDecl(T, "execute")) {
+        if (T != void and (@typeInfo(T) != .Struct or !@hasDecl(T, "execute"))) {
             @compileError("RenderToSwapchain(info: SwapchainRenderingInformation, pass: Pass) should have\n\tPass = struct {\n\t\tstates: PipelineOrOtherObjects,\n\t\t..., \n\t\tpub fn execute(pass: struct {}) !void {...}\n\t};");
         }
     }
     switch (info.colorLoadOp) {
         .keep => {},
         .clear => {
+            if (!self.lastColorMask[0].eq(.{})) {
+                gl.colorMask(gl.TRUE, gl.TRUE, gl.TRUE, gl.TRUE);
+                self.lastColorMask[0] = .{};
+            }
             gl.clearNamedFramebufferfv(0, gl.COLOR, 0, @ptrCast(&info.clearColor));
         },
         .dontCare => {
@@ -149,7 +161,92 @@ pub fn renderToSwapchain(self: *Context, info: SwapchainRenderingInformation, pa
 
     self.updateViewport(info.viewport);
 
-    try @call(.auto, T.execute, .{pass});
+    if (@TypeOf(pass) != void) {
+        try @call(.auto, T.execute, .{pass});
+    }
+}
+
+pub fn renderToFramebuffer(self: *Context, info: FramebufferRenderingInformation, pass: anytype) !void {
+    const T: type = @TypeOf(pass);
+    comptime {
+        if (T != void and (@typeInfo(T) != .Struct or !@hasDecl(T, "execute"))) {
+            @compileError("RenderToSwapchain(info: SwapchainRenderingInformation, pass: Pass) should have\n\tPass = struct {\n\t\tstates: PipelineOrOtherObjects,\n\t\t..., \n\t\tpub fn execute(pass: struct {}) !void {...}\n\t};");
+        }
+    }
+    var viewport = info.viewport;
+
+    for (info.colorAttachments, 0..) |attachment, index| {
+        viewport.extent.width = @min(viewport.extent.width, info.framebuffer.colorAttachments[index].createInfo.extent.width);
+        viewport.extent.height = @min(viewport.extent.height, info.framebuffer.colorAttachments[index].createInfo.extent.height);
+        switch (attachment.colorLoadOp) {
+            .keep => {},
+            .clear => {
+                if (!self.lastColorMask[index].eq(.{})) {
+                    gl.colorMask(gl.TRUE, gl.TRUE, gl.TRUE, gl.TRUE);
+                    self.lastColorMask[index] = .{};
+                }
+                switch (attachment.clearColor) {
+                    .f32 => |color| {
+                        gl.clearNamedFramebufferfv(info.framebuffer.handle, gl.COLOR, @intCast(index), @ptrCast(&color));
+                    },
+                    .i32 => |color| {
+                        gl.clearNamedFramebufferiv(info.framebuffer.handle, gl.COLOR, @intCast(index), @ptrCast(&color));
+                    },
+                    .u32 => |color| {
+                        gl.clearNamedFramebufferuiv(info.framebuffer.handle, gl.COLOR, @intCast(index), @ptrCast(&color));
+                    },
+                }
+            },
+            .dontCare => {
+                const colorAttachment: u32 = @intCast(gl.COLOR_ATTACHMENT0 + index);
+                gl.invalidateNamedFramebufferData(info.framebuffer.handle, 1, @ptrCast(&colorAttachment));
+            },
+        }
+    }
+    if (info.framebuffer.depthTexture) |depth| {
+        viewport.extent.width = @min(viewport.extent.width, depth.createInfo.extent.width);
+        viewport.extent.height = @min(viewport.extent.height, depth.createInfo.extent.height);
+        switch (info.depthLoadOp) {
+            .keep => {},
+            .clear => {
+                if (!self.lastDepthMask) {
+                    glEnableOrDisable(gl.DEPTH, true);
+                    self.lastDepthMask = true;
+                }
+                gl.clearNamedFramebufferfv(info.framebuffer.handle, gl.DEPTH, 0, @ptrCast(&info.clearDepthValue));
+            },
+            .dontCare => {
+                const colorAttachment: u32 = gl.DEPTH_ATTACHMENT;
+                gl.invalidateNamedFramebufferData(info.framebuffer.handle, 1, @ptrCast(&colorAttachment));
+            },
+        }
+    }
+    if (info.framebuffer.stencilTexture) |stencil| {
+        viewport.extent.width = @min(viewport.extent.width, stencil.createInfo.extent.width);
+        viewport.extent.height = @min(viewport.extent.height, stencil.createInfo.extent.height);
+        switch (info.stencilLoadOp) {
+            .keep => {},
+            .clear => {
+                if (self.lastStencilWriteMask[0] == 0 or self.lastStencilWriteMask[1] == 0) {
+                    glEnableOrDisable(gl.STENCIL, true);
+                    self.lastDepthMask = true;
+                    self.lastStencilWriteMask[0] = 1;
+                    self.lastStencilWriteMask[1] = 1;
+                }
+                gl.clearNamedFramebufferfv(info.framebuffer.handle, gl.STENCIL, 0, @ptrCast(&info.clearDepthValue));
+            },
+            .dontCare => {
+                const colorAttachment: u32 = gl.STENCIL_ATTACHMENT;
+                gl.invalidateNamedFramebufferData(info.framebuffer.handle, 1, @ptrCast(&colorAttachment));
+            },
+        }
+    }
+
+    self.updateViewport(info.viewport);
+
+    if (@TypeOf(pass) != void) {
+        try @call(.auto, T.execute, .{pass});
+    }
 }
 
 pub fn bindGraphicPipeline(self: *Context, pipeline: GraphicPipeline) void {
@@ -313,4 +410,8 @@ pub fn updateViewport(self: *Context, viewport: Viewport) void {
         //gl.clipControl(gl.LOWER_LEFT, @intFromEnum(viewport.depthRange));
         self.previousViewport = viewport;
     }
+}
+
+pub fn createFramebuffer(self: *Context, name: ?[]const u8, info: Framebuffer.FramebufferCreateInfo) !Framebuffer {
+    return Framebuffer.init(self.allocator, name, info.colorAttachment, info.depth, info.stencil);
 }

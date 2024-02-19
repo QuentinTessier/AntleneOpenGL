@@ -3,7 +3,7 @@ const gl = @import("../gl4_6.zig");
 
 pub const Texture = @This();
 
-fn Extent(comptime T: type) type {
+pub fn Extent(comptime T: type) type {
     return struct {
         width: T,
         height: T,

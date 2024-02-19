@@ -7,10 +7,12 @@ const DebugGroup = @import("./Debug/Group.zig");
 
 pub const glFunctionPointer = gl.FunctionPointer;
 pub const Texture = Context.Texture;
+pub const Extent = Texture.Extent;
 pub const GraphicPipeline = @import("Pipeline/GraphicPipeline.zig");
 pub const ComputePipeline = @import("Pipeline/ComputePipeline.zig");
 pub const Sampler = @import("Resources/Sampler.zig");
 pub const Buffer = @import("Resources/Buffer.zig");
+pub const Framebuffer = @import("Resources/Framebuffer.zig");
 
 pub const Tools = @import("Tools/ReflectShaderToStruct.zig");
 
@@ -56,6 +58,10 @@ pub const Resources = struct {
     pub inline fn CreateTypedBuffer(name: ?[]const u8, comptime T: type, data: ?[]const T, flags: Buffer.BufferStorageFlags) Buffer {
         return Buffer.typedInit(name, T, data, flags);
     }
+
+    pub inline fn CreateFramebuffer(name: ?[]const u8, info: Framebuffer.FramebufferCreateInfo) !Framebuffer {
+        return __context.createFramebuffer(name, info);
+    }
 };
 
 pub const Rendering = struct {
@@ -65,6 +71,45 @@ pub const Rendering = struct {
 
     pub fn toFramebuffer(info: Context.FramebufferRenderingInformation, pass: anytype) !void {
         try __context.renderToFramebuffer(info, pass);
+    }
+
+    const Offset = struct {
+        x: i32 = 0,
+        y: i32 = 0,
+        z: i32 = 0,
+    };
+
+    const BlitMask = struct {
+        color: bool = true,
+        depth: bool = false,
+        stencil: bool = false,
+    };
+
+    const BlitFilter = enum(u32) {
+        nearest = gl.NEAREST,
+        linear = gl.LINEAR,
+    };
+
+    pub fn BlitFramebufferToSwapchain(framebuffer: Framebuffer, sourceOffset: Offset, targetOffset: Offset, sourceExtent: Extent(i32), targetExtent: Extent(i32), mask: BlitMask, filter: BlitFilter) void {
+        var m: u32 = 0;
+        m |= if (mask.color) gl.COLOR_BUFFER_BIT else 0;
+        m |= if (mask.depth) gl.DEPTH_BUFFER_BIT else 0;
+        m |= if (mask.stencil) gl.STENCIL_BUFFER_BIT else 0;
+
+        gl.blitNamedFramebuffer(
+            framebuffer.handle,
+            0,
+            sourceOffset.x,
+            sourceOffset.y,
+            sourceExtent.width,
+            sourceExtent.height,
+            targetOffset.x,
+            targetOffset.y,
+            targetExtent.width,
+            targetExtent.height,
+            m,
+            @intFromEnum(filter),
+        );
     }
 };
 

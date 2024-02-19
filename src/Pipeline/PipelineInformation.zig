@@ -2,13 +2,21 @@ const std = @import("std");
 const gl = @import("../gl4_6.zig");
 
 pub const VertexInputFormat = enum(u32) {
-    float = gl.FLOAT,
+    i8 = gl.BYTE,
+    u8 = gl.UNSIGNED_BYTE,
+    i16 = gl.SHORT,
+    u16 = gl.UNSIGNED_SHORT,
+    i32 = gl.INT,
+    u32 = gl.UNSIGNED_INT,
+    fixed = gl.FIXED,
+    f32 = gl.FLOAT,
+    f64 = gl.DOUBLE,
 };
 
 pub const VertexInputAttributeDescription = struct {
     location: u32,
     binding: u32,
-    format: VertexInputFormat, // TODO: fill and use the VertexInputFormat enum
+    format: VertexInputFormat,
     size: u32,
     offset: u32,
 };

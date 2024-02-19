@@ -58,7 +58,6 @@ pub fn createComputePipeline(_: *Caches, _: std.mem.Allocator, info: PipelineInf
 }
 
 pub fn createSampler(self: *Caches, allocator: std.mem.Allocator, state: Sampler.SamplerState) !u64 {
-    //const sampler = Sampler.init(state);
     const id = Sampler.hash(state);
 
     const entry = try self.samplerObjectCache.getOrPut(allocator, id);
