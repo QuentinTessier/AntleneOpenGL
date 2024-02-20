@@ -93,8 +93,3 @@ pub const Pass = struct {
 };
 
 ```
-
-You would get a new file:
-```zig
-
-```
