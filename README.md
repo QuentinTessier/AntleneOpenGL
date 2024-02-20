@@ -35,6 +35,11 @@ pub fn build(b: *std.Build) void {
 
 // Generated output.zig file:
 pub const Shader = struct {
+    pub const SourceFiles: []ShaderSourceFile = &.{
+        .{ .stage = .Vertex, .path = "shader.vert" },
+        .{ .stage = .Fragment, .path = "shader.frag" },
+    };
+
     pub const Input = struct {
         pub const Position : ShaderInput = .{
             .stage = .Vertex,
@@ -77,6 +82,11 @@ pub const Shader = struct {
 // In your application
 
 const Context = @import("AntleneOpenGL");
+
+const pipeline = Context.Resources.CreatePipelineFromReflected(.{
+    .reflectedType = Output.Shader,
+    ... // Standard Pipeline parameters (depth testing, culling, ...)
+}); // We can automaticaly generated the appropriate VertexArray from the reflected type and do some fancy debug stuff using this information at runtime. 
 
 pub const Pass = struct {
     pipeline: Context.GraphicPipeline,
