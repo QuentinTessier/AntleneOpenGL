@@ -21,7 +21,6 @@ pub const PipelineType = enum(u8) {
 };
 
 vertexArrayObjectCache: std.AutoHashMapUnmanaged(u64, VertexArrayObject) = .{},
-samplerObjectCache: std.AutoArrayHashMapUnmanaged(u64, SamplerObject) = .{},
 
 pub fn init() Caches {
     return .{};
@@ -34,13 +33,6 @@ pub fn deinit(self: *Caches, allocator: std.mem.Allocator) void {
             entry.value_ptr.deinit();
         }
         self.vertexArrayObjectCache.deinit(allocator);
-    }
-    {
-        var ite = self.samplerObjectCache.iterator();
-        while (ite.next()) |entry| {
-            entry.value_ptr.deinit();
-        }
-        self.samplerObjectCache.deinit(allocator);
     }
 }
 
@@ -55,15 +47,4 @@ pub fn createGraphicPipeline(self: *Caches, allocator: std.mem.Allocator, info: 
 
 pub fn createComputePipeline(_: *Caches, _: std.mem.Allocator, info: PipelineInformation.ComputePipelineInformation) !ComputePipeline {
     return ComputePipeline.init(info);
-}
-
-pub fn createSampler(self: *Caches, allocator: std.mem.Allocator, state: Sampler.SamplerState) !u64 {
-    const id = Sampler.hash(state);
-
-    const entry = try self.samplerObjectCache.getOrPut(allocator, id);
-    if (!entry.found_existing) {
-        entry.value_ptr.* = Sampler.init(state);
-    }
-
-    return id;
 }

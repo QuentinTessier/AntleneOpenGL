@@ -10,6 +10,7 @@ const ColorComponentFlags = @import("Pipeline/PipelineInformation.zig").ColorCom
 pub const Texture = @import("Resources/Texture.zig");
 pub const Extent = Texture.Extent;
 pub const Framebuffer = @import("Resources/Framebuffer.zig");
+const Sampler = @import("./Resources/Sampler.zig");
 
 pub const Context = @This();
 
@@ -175,6 +176,7 @@ pub fn renderToFramebuffer(self: *Context, info: FramebufferRenderingInformation
     }
     var viewport = info.viewport;
 
+    gl.bindFramebuffer(gl.FRAMEBUFFER, info.framebuffer.handle);
     for (info.colorAttachments, 0..) |attachment, index| {
         viewport.extent.width = @min(viewport.extent.width, info.framebuffer.colorAttachments[index].createInfo.extent.width);
         viewport.extent.height = @min(viewport.extent.height, info.framebuffer.colorAttachments[index].createInfo.extent.height);

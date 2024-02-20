@@ -13,6 +13,7 @@ pub const ComputePipeline = @import("Pipeline/ComputePipeline.zig");
 pub const Sampler = @import("Resources/Sampler.zig");
 pub const Buffer = @import("Resources/Buffer.zig");
 pub const Framebuffer = @import("Resources/Framebuffer.zig");
+pub const SparseTextureArray = @import("Resources/SparseArrayTexture.zig");
 
 pub const Tools = @import("Tools/ReflectShaderToStruct.zig");
 
@@ -46,9 +47,12 @@ pub const Resources = struct {
         return __context.createTexture(info);
     }
 
-    pub fn CreateSampler(state: Sampler.SamplerState) !u64 {
-        const s = try __context.caches.createSampler(__context.allocator, state);
-        return s;
+    pub fn CreateSparseArrayTexture(size: usize) !SparseTextureArray {
+        return SparseTextureArray.init(__context.allocator, size);
+    }
+
+    pub fn CreateSampler(state: Sampler.SamplerState) Sampler {
+        return Sampler.init(state);
     }
 
     pub fn CreateBuffer(name: ?[]const u8, data: ?[]const u8, flags: Buffer.BufferStorageFlags) Buffer {
