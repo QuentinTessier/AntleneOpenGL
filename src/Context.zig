@@ -105,6 +105,7 @@ lastStencilWriteMask: [2]i32 = .{ -1, -1 },
 lastColorMask: [8]ColorComponentFlags = undefined,
 
 previousViewport: ?Viewport = null,
+previousFramebuffer: ?Framebuffer = null,
 
 pub fn init(allocator: std.mem.Allocator) Context {
     return .{
@@ -176,7 +177,10 @@ pub fn renderToFramebuffer(self: *Context, info: FramebufferRenderingInformation
     }
     var viewport = info.viewport;
 
-    gl.bindFramebuffer(gl.FRAMEBUFFER, info.framebuffer.handle);
+    if (self.previousFramebuffer == null or (self.previousFramebuffer != null and self.previousFramebuffer.?.handle != info.framebuffer.handle)) {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, info.framebuffer.handle);
+        self.previousFramebuffer = info.framebuffer;
+    }
     for (info.colorAttachments, 0..) |attachment, index| {
         viewport.extent.width = @min(viewport.extent.width, info.framebuffer.colorAttachments[index].createInfo.extent.width);
         viewport.extent.height = @min(viewport.extent.height, info.framebuffer.colorAttachments[index].createInfo.extent.height);
