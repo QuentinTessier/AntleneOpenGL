@@ -81,11 +81,13 @@ const Context = @import("AntleneOpenGL");
 pub const Pass = struct {
     pipeline: Context.GraphicPipeline,
     diffuse: Context.Texture,
+    specular: Context.Texture,
     meshData: Context.Buffer,
 
     pub fn execute(pass: Pass) !void {
         Context.Commands.BindGraphicPipeline(pass.pipeline);
         Context.Commands.BindTextureFromReflected(Output.Shader, .Diffuse, pass.diffuse); // Will bind diffuse to binding point 0
+        Context.Commands.BindTextureFromReflected(Output.Shader, .Specular, pass.diffuse); // Won't compile since Specular wasn't found in shader
         Context.Commands.BindShaderStorageBufferFromReflected(Output.Shader, .MeshData, pass.meshData)
     }
 };
