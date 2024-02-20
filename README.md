@@ -85,7 +85,7 @@ pub const Pass = struct {
 
     pub fn execute(pass: Pass) !void {
         Context.Commands.BindGraphicPipeline(pass.pipeline);
-        Context.Commands.BindTextureFromReflected(Output.Shader, .Diffuse, pass.diffuse);
+        Context.Commands.BindTextureFromReflected(Output.Shader, .Diffuse, pass.diffuse); // Will bind diffuse to binding point 0
         Context.Commands.BindShaderStorageBufferFromReflected(Output.Shader, .MeshData, pass.meshData)
     }
 };
