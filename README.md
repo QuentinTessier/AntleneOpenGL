@@ -68,7 +68,9 @@ pub const Shader = struct {
     };
 
     pub const Sampler = struct {
-
+        pub const Diffuse = struct {
+            .binding = 0,
+        };
     };
 };
 
