@@ -87,7 +87,7 @@ pub const Pass = struct {
     pub fn execute(pass: Pass) !void {
         Context.Commands.BindGraphicPipeline(pass.pipeline);
         Context.Commands.BindTextureFromReflected(Output.Shader, .Diffuse, pass.diffuse); // Will bind diffuse to binding point 0
-        Context.Commands.BindTextureFromReflected(Output.Shader, .Specular, pass.diffuse); // Won't compile since Specular wasn't found in shader
+        Context.Commands.BindTextureFromReflected(Output.Shader, .Specular, pass.specular); // Won't compile since Specular wasn't found in shader
         Context.Commands.BindShaderStorageBufferFromReflected(Output.Shader, .MeshData, pass.meshData)
     }
 };
