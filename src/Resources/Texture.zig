@@ -77,6 +77,13 @@ pub const Format = enum(u32) {
     rgba16ui = gl.RGBA16UI,
     rgba32i = gl.RGBA32I,
     rgba32ui = gl.RGBA32UI,
+
+    df32 = gl.DEPTH_COMPONENT32F,
+    d32 = gl.DEPTH_COMPONENT32,
+    d24 = gl.DEPTH_COMPONENT24,
+    d16 = gl.DEPTH_COMPONENT16,
+    d32s8 = gl.DEPTH32F_STENCIL8,
+    d24s8 = gl.DEPTH24_STENCIL8,
 };
 
 pub const ImageType = enum(u32) {
