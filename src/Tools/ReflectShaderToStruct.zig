@@ -95,65 +95,170 @@ pub fn linkProgram(shaders: []const u32) !u32 {
     return program;
 }
 
-pub fn reflectInterface(allocator: std.mem.Allocator, program: u32, interface: gl.GLenum) !std.StringArrayHashMapUnmanaged(u32) {
+pub fn reflectShaderStorageBlock(allocator: std.mem.Allocator, program: u32, writer: anytype) !void {
     var nActiveResources: i32 = 0;
-    gl.getProgramInterfaceiv(program, interface, gl.ACTIVE_RESOURCES, @ptrCast(&nActiveResources));
+    gl.getProgramInterfaceiv(program, gl.SHADER_STORAGE_BLOCK, gl.ACTIVE_RESOURCES, @ptrCast(&nActiveResources));
 
-    var resources: std.StringArrayHashMapUnmanaged(u32) = .{};
+    try writer.print("\tpub const ShaderStorageBlocks = struct {{\n", .{});
     for (0..@intCast(nActiveResources)) |i| {
-        var name_length: i32 = 0;
+        const name_length: i32 = blk: {
+            const property: i32 = gl.NAME_LENGTH;
+            var len: i32 = 0;
 
-        const property: i32 = gl.NAME_LENGTH;
-        gl.getProgramResourceiv(
-            program,
-            interface,
-            @intCast(i),
-            1,
-            @ptrCast(&property),
-            1,
-            null,
-            @ptrCast(&name_length),
-        );
-
-        const name = try allocator.alloc(u8, @intCast(name_length));
-        gl.getProgramResourceName(
-            program,
-            interface,
-            @intCast(i),
-            @intCast(name.len),
-            null,
-            name.ptr,
-        );
-
-        if (interface == gl.UNIFORM_BLOCK or interface == gl.SHADER_STORAGE_BLOCK) {
-            const binding_property: i32 = gl.BUFFER_BINDING;
-            var binding: i32 = -1;
             gl.getProgramResourceiv(
                 program,
-                interface,
+                gl.SHADER_STORAGE_BLOCK,
                 @intCast(i),
                 1,
-                @ptrCast(&binding_property),
+                @ptrCast(&property),
                 1,
                 null,
-                @ptrCast(&binding),
+                @ptrCast(&len),
             );
-            try resources.put(allocator, name, @intCast(binding));
-        } else if (interface == gl.UNIFORM) {
-            const location = gl.getProgramResourceLocation(program, interface, name.ptr);
+            break :blk len;
+        };
 
-            if (location >= 0) {
-                try resources.put(allocator, name, @intCast(location));
-            } else {
-                allocator.free(name);
-            }
-        }
+        const name: []const u8 = blk: {
+            const array = try allocator.alloc(u8, @intCast(name_length));
+            gl.getProgramResourceName(
+                program,
+                gl.SHADER_STORAGE_BLOCK,
+                @intCast(i),
+                @intCast(array.len),
+                null,
+                array.ptr,
+            );
+            break :blk array;
+        };
+        defer allocator.free(name);
+
+        const binding: i32 = blk: {
+            const property: i32 = gl.BUFFER_BINDING;
+            var b: i32 = 0;
+
+            gl.getProgramResourceiv(
+                program,
+                gl.SHADER_STORAGE_BLOCK,
+                @intCast(i),
+                1,
+                @ptrCast(&property),
+                1,
+                null,
+                @ptrCast(&b),
+            );
+            break :blk b;
+        };
+
+        try writer.print("\t\tpub const {s}: ReflectionType.ShaderStorageBufferBinding = .{{ .binding = {} }};\n", .{ name[0 .. name.len - 1], binding });
     }
-    return resources;
+    try writer.print("\t}};\n\n", .{});
 }
 
-pub fn reflect(allocator: std.mem.Allocator, namespace: []const u8, information: []const ShaderInformation, stream: *std.io.StreamSource) !void {
-    var writer = stream.writer();
+pub fn reflectUniformBlock(allocator: std.mem.Allocator, program: u32, writer: anytype) !void {
+    var nActiveResources: i32 = 0;
+    gl.getProgramInterfaceiv(program, gl.UNIFORM_BLOCK, gl.ACTIVE_RESOURCES, @ptrCast(&nActiveResources));
+
+    try writer.print("\tpub const UniformBlocks = struct {{\n", .{});
+    for (0..@intCast(nActiveResources)) |i| {
+        const name_length: i32 = blk: {
+            const property: i32 = gl.NAME_LENGTH;
+            var len: i32 = 0;
+
+            gl.getProgramResourceiv(
+                program,
+                gl.UNIFORM_BLOCK,
+                @intCast(i),
+                1,
+                @ptrCast(&property),
+                1,
+                null,
+                @ptrCast(&len),
+            );
+            break :blk len;
+        };
+
+        const name: []const u8 = blk: {
+            const array = try allocator.alloc(u8, @intCast(name_length));
+            gl.getProgramResourceName(
+                program,
+                gl.UNIFORM_BLOCK,
+                @intCast(i),
+                @intCast(array.len),
+                null,
+                array.ptr,
+            );
+            break :blk array;
+        };
+        defer allocator.free(name);
+
+        const binding: i32 = blk: {
+            const property: i32 = gl.BUFFER_BINDING;
+            var b: i32 = 0;
+
+            gl.getProgramResourceiv(
+                program,
+                gl.UNIFORM_BLOCK,
+                @intCast(i),
+                1,
+                @ptrCast(&property),
+                1,
+                null,
+                @ptrCast(&b),
+            );
+            break :blk b;
+        };
+
+        try writer.print("\t\tpub const {s}: ReflectionType.UniformBufferBinding = .{{ .binding = {} }};\n", .{ name[0 .. name.len - 1], binding });
+    }
+    try writer.print("\t}};\n\n", .{});
+}
+
+pub fn reflectSamplers(allocator: std.mem.Allocator, program: u32, writer: anytype) !void {
+    var nActiveResources: i32 = 0;
+    gl.getProgramInterfaceiv(program, gl.UNIFORM, gl.ACTIVE_RESOURCES, @ptrCast(&nActiveResources));
+
+    try writer.print("\tpub const Samplers = struct {{\n", .{});
+    for (0..@intCast(nActiveResources)) |i| {
+        const name_length: i32 = blk: {
+            const property: i32 = gl.NAME_LENGTH;
+            var len: i32 = 0;
+
+            gl.getProgramResourceiv(
+                program,
+                gl.UNIFORM,
+                @intCast(i),
+                1,
+                @ptrCast(&property),
+                1,
+                null,
+                @ptrCast(&len),
+            );
+            break :blk len;
+        };
+
+        const name: []const u8 = blk: {
+            const array = try allocator.alloc(u8, @intCast(name_length));
+            gl.getProgramResourceName(
+                program,
+                gl.UNIFORM,
+                @intCast(i),
+                @intCast(array.len),
+                null,
+                array.ptr,
+            );
+            break :blk array;
+        };
+        defer allocator.free(name);
+
+        const location = gl.getProgramResourceLocation(program, gl.UNIFORM, name.ptr);
+        if (location >= 0) {
+            try writer.print("\t\tpub const {s}: ReflectionType.UniformBufferBinding = .{{ .binding = {} }};\n", .{ name[0 .. name.len - 1], location });
+        }
+    }
+    try writer.print("\t}};\n\n", .{});
+}
+
+pub fn reflect(allocator: std.mem.Allocator, namespace: []const u8, library_name: []const u8, information: []const ShaderInformation, writer: anytype) !void {
     var shaders = try allocator.alloc(u32, information.len);
     for (information, 0..) |info, index| {
         shaders[index] = try compileShader(@intFromEnum(info.stage), info.source);
@@ -168,31 +273,20 @@ pub fn reflect(allocator: std.mem.Allocator, namespace: []const u8, information:
     const program = try linkProgram(shaders);
     defer gl.deleteProgram(program);
 
-    var reflected = ReflectedProgram{
-        .uniformBlocks = try reflectInterface(allocator, program, gl.UNIFORM_BLOCK),
-        .shaderStorageBlocks = try reflectInterface(allocator, program, gl.SHADER_STORAGE_BLOCK),
-        .samplers = try reflectInterface(allocator, program, gl.UNIFORM),
-    };
-    defer reflected.deinit(allocator);
-
+    try writer.print("const ReflectionType = @import(\"{s}\").ReflectionType;\n\n", .{library_name});
     try writer.print("pub const {s} = struct {{\n", .{namespace});
+
     {
-        var ite = reflected.shaderStorageBlocks.iterator();
-        while (ite.next()) |entry| {
-            try writer.print("\tpub const {s}: u32 = {};\n", .{ entry.key_ptr.*[0 .. entry.key_ptr.*.len - 1], entry.value_ptr.* });
-        }
+        try reflectShaderStorageBlock(allocator, program, writer);
     }
+
     {
-        var ite = reflected.uniformBlocks.iterator();
-        while (ite.next()) |entry| {
-            try writer.print("\tpub const {s}: u32 = {};\n", .{ entry.key_ptr.*[0 .. entry.key_ptr.*.len - 1], entry.value_ptr.* });
-        }
+        try reflectUniformBlock(allocator, program, writer);
     }
+
     {
-        var ite = reflected.samplers.iterator();
-        while (ite.next()) |entry| {
-            try writer.print("\tpub const {s}: u32 = {};\n", .{ entry.key_ptr.*[0 .. entry.key_ptr.*.len - 1], entry.value_ptr.* });
-        }
+        try reflectSamplers(allocator, program, writer);
     }
+
     try writer.print("}};\n", .{});
 }
