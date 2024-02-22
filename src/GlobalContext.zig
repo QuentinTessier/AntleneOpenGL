@@ -16,6 +16,7 @@ pub const Framebuffer = @import("Resources/Framebuffer.zig");
 pub const SparseTextureArray = @import("Resources/SparseArrayTexture.zig");
 
 pub const Tools = @import("Tools/ReflectShaderToStruct.zig");
+pub const ReflectionType = @import("Pipeline/ReflectionType.zig");
 
 const PipelineInformation = @import("Pipeline/PipelineInformation.zig");
 
