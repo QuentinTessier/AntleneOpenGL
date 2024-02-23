@@ -1,40 +1,7 @@
 const std = @import("std");
 const gl = @import("../gl4_6.zig");
-
-pub const ReflectedProgram = struct {
-    uniformBlocks: std.StringArrayHashMapUnmanaged(u32) = .{},
-    shaderStorageBlocks: std.StringArrayHashMapUnmanaged(u32) = .{},
-    samplers: std.StringArrayHashMapUnmanaged(u32) = .{},
-
-    pub fn deinit(self: *ReflectedProgram, allocator: std.mem.Allocator) void {
-        for (self.uniformBlocks.keys()) |name| {
-            allocator.free(name);
-        }
-        self.uniformBlocks.deinit(allocator);
-
-        for (self.shaderStorageBlocks.keys()) |name| {
-            allocator.free(name);
-        }
-        self.shaderStorageBlocks.deinit(allocator);
-
-        for (self.samplers.keys()) |name| {
-            allocator.free(name);
-        }
-        self.samplers.deinit(allocator);
-    }
-};
-
-pub const ShaderSource = union(enum(u32)) {
-    glsl: []const u8,
-    spirv: []const u8,
-};
-
-pub const ShaderStage = enum(u32) {
-    vertex = gl.VERTEX_SHADER,
-    fragment = gl.FRAGMENT_SHADER,
-
-    compute = gl.COMPUTE_SHADER,
-};
+const ShaderSource = @import("../Pipeline/PipelineInformation.zig").ShaderSource;
+const ShaderStage = @import("../Pipeline/PipelineInformation.zig").ShaderStage;
 
 pub const ShaderInformation = struct {
     stage: ShaderStage,
@@ -258,6 +225,58 @@ pub fn reflectSamplers(allocator: std.mem.Allocator, program: u32, writer: anyty
     try writer.print("\t}};\n\n", .{});
 }
 
+pub fn reflectShaderInput(allocator: std.mem.Allocator, program: u32, stage: ShaderStage, writer: anytype) !void {
+    var nActiveResources: i32 = 0;
+    gl.getProgramInterfaceiv(program, gl.PROGRAM_INPUT, gl.ACTIVE_RESOURCES, @ptrCast(&nActiveResources));
+    const stage_name = switch (stage) {
+        .Vertex => "Vertex",
+        .Fragment => "Fragment",
+        .Compute => "Compute",
+    };
+    try writer.print("\tpub const {s}: []ReflectionType.ShaderInput = &.{{\n", .{stage_name});
+    for (0..@intCast(nActiveResources)) |i| {
+        const name_length: i32 = blk: {
+            const property: i32 = gl.NAME_LENGTH;
+            var len: i32 = 0;
+
+            gl.getProgramResourceiv(
+                program,
+                gl.PROGRAM_INPUT,
+                @intCast(i),
+                1,
+                @ptrCast(&property),
+                1,
+                null,
+                @ptrCast(&len),
+            );
+            break :blk len;
+        };
+
+        const name: []const u8 = blk: {
+            const array = try allocator.alloc(u8, @intCast(name_length));
+            gl.getProgramResourceName(
+                program,
+                gl.PROGRAM_INPUT,
+                @intCast(i),
+                @intCast(array.len),
+                null,
+                array.ptr,
+            );
+            break :blk array;
+        };
+        defer allocator.free(name);
+
+        if (!std.mem.startsWith(u8, name, "gl_")) {
+            const location = gl.getAttribLocation(program, name.ptr);
+            std.log.info("{s} = {}", .{ name[0 .. name.len - 1], location });
+        }
+        //if (location >= 0) {
+        //    try writer.print("\t\t.{{ .name = \"{s}\", .location = {}, .stage = .Vertex, .size = 0, .type = void, }}\n", .{ name[0 .. name.len - 1], location });
+        //}
+    }
+    try writer.print("\t}};\n\n", .{});
+}
+
 pub fn reflect(allocator: std.mem.Allocator, namespace: []const u8, library_name: []const u8, information: []const ShaderInformation, writer: anytype) !void {
     var shaders = try allocator.alloc(u32, information.len);
     for (information, 0..) |info, index| {
@@ -286,6 +305,13 @@ pub fn reflect(allocator: std.mem.Allocator, namespace: []const u8, library_name
 
     {
         try reflectSamplers(allocator, program, writer);
+    }
+
+    {
+        for (information, 0..) |info, index| {
+            const shader = shaders[index];
+            try reflectShaderInput(allocator, shader, info.stage, writer);
+        }
     }
 
     try writer.print("}};\n", .{});

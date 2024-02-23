@@ -1,6 +1,13 @@
 const std = @import("std");
 const gl = @import("../gl4_6.zig");
 
+pub const ShaderStage = enum(u32) {
+    Vertex = gl.VERTEX_SHADER,
+    Fragment = gl.FRAGMENT_SHADER,
+
+    Compute = gl.COMPUTE_SHADER,
+};
+
 pub const VertexInputFormat = enum(u32) {
     i8 = gl.BYTE,
     u8 = gl.UNSIGNED_BYTE,

@@ -1,11 +1,8 @@
 const std = @import("std");
-
-pub const ShaderStage = enum(u32) {
-    Vertex,
-    Fragment,
-};
+const ShaderStage = @import("PipelineInformation.zig").ShaderStage;
 
 pub const ShaderInput = struct {
+    name: []const u8,
     stage: ShaderStage,
     location: usize,
     size: usize,
@@ -13,6 +10,7 @@ pub const ShaderInput = struct {
 };
 
 pub const ShaderOutput = struct {
+    name: []const u8,
     stage: ShaderStage,
     location: usize,
     size: usize,
