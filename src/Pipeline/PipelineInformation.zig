@@ -214,19 +214,19 @@ pub const PipelineColorBlendState = struct {
 
 pub const ShaderSource = union(enum(u32)) {
     glsl: []const u8,
-    spirv: []const u8,
+    spirv: []const u32,
 
     pub fn len(self: ShaderSource) usize {
         return switch (self) {
             .glsl => |glsl| glsl.len,
-            .spirv => |spirv| spirv.len,
+            .spirv => |spirv| spirv.len * 4,
         };
     }
 
     pub fn slice(self: ShaderSource) []const u8 {
         return switch (self) {
             .glsl => |glsl| glsl,
-            .spirv => |spirv| spirv,
+            .spirv => |spirv| std.mem.sliceAsBytes(spirv),
         };
     }
 };

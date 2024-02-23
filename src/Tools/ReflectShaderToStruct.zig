@@ -4,6 +4,7 @@ const ShaderSource = @import("../Pipeline/PipelineInformation.zig").ShaderSource
 const ShaderStage = @import("../Pipeline/PipelineInformation.zig").ShaderStage;
 const ReflectionType = @import("../Pipeline/ReflectionType.zig");
 
+const Shader = @import("../Resources/Shader.zig");
 const ReflectSource = @import("./ReflectSource.zig");
 
 pub const ShaderInformation = struct {
@@ -395,40 +396,60 @@ pub fn reflectShaderOutput(allocator: std.mem.Allocator, program: u32, writer: a
 }
 
 pub const ReflectionInformation = struct {
-    library_name: []const u8 = "Graphics",
+    libraryName: []const u8 = "Graphics",
     namespace: []const u8 = "Pipeline",
+    shaderType: Shader.ShaderType,
     source: ReflectSource.StoreShaderSource,
-    shaders: []const ShaderInformation,
+    shaders: []const []const u8,
 };
 
 pub fn reflect(allocator: std.mem.Allocator, information: ReflectionInformation, writer: anytype) !void {
     var shaders = try allocator.alloc(u32, information.shaders.len);
-    for (information.shaders, 0..) |info, index| {
-        shaders[index] = try compileShader(@intFromEnum(info.stage), info.source);
+    var shadersInformation = try allocator.alloc(ShaderInformation, information.shaders.len);
+    for (information.shaders, 0..) |shader, index| {
+        switch (information.shaderType) {
+            .glsl => {
+                const tmp = try Shader.fromGLSLFileKeepSource(allocator, shader);
+                shaders[index] = tmp.handle;
+                shadersInformation[index] = .{ .stage = tmp.stage, .source = .{ .glsl = tmp.source } };
+            },
+            .spirv => {
+                const tmp = try Shader.fromSPIRVFileKeepSource(allocator, shader);
+                shaders[index] = tmp.handle;
+                shadersInformation[index] = .{ .stage = tmp.stage, .source = .{ .spirv = tmp.source } };
+            },
+        }
     }
+    const program = try Shader.linkProgram(shaders);
+
     defer {
         for (shaders) |shader| {
             gl.deleteShader(shader);
         }
         allocator.free(shaders);
+        for (shadersInformation) |info| {
+            switch (info.source) {
+                .glsl => |glsl| allocator.free(glsl),
+                .spirv => |spirv| allocator.free(spirv),
+            }
+        }
+        allocator.free(shadersInformation);
+        defer gl.deleteProgram(program);
     }
 
-    const program = try linkProgram(shaders);
-    defer gl.deleteProgram(program);
-
-    try writer.print("const ReflectionType = @import(\"{s}\").ReflectionType;\n\n", .{information.library_name});
+    try writer.print("const ReflectionType = @import(\"{s}\").ReflectionType;\n\n", .{information.libraryName});
     try writer.print("pub const {s} = struct {{\n", .{information.namespace});
 
-    try writer.print("\tpub const Stages: []ReflectionType.ShaderStage = .{{", .{});
-    for (information.shaders) |info| {
-        const stage_name = switch (info.stage) {
-            .Vertex => "Vertex",
-            .Fragment => "Fragment",
-            .Compute => "Compute",
-        };
-        try writer.print("\n\t\t.{s},", .{stage_name});
-    }
-    try writer.print("\t}};\n\n", .{});
+    // try writer.print("\tpub const Stages: []ReflectionType.ShaderStage = .{{", .{});
+    // for (information.shaders) |info| {
+    // const stage_name = switch (info.stage) {
+    // .Vertex => "Vertex",
+    // .Fragment => "Fragment",
+    // .Compute => "Compute",
+    // };
+    // try writer.print("\n\t\t.{s},", .{stage_name});
+    // }
+    // try writer.print("\t}};\n\n", .{});
 
     {
         try reflectShaderInput(allocator, program, writer);
@@ -452,6 +473,13 @@ pub fn reflect(allocator: std.mem.Allocator, information: ReflectionInformation,
 
     switch (information.source) {
         .ProgramBinary => try ReflectSource.reflectProgram(allocator, information.namespace, program, writer),
+        .ShaderSource => {
+            switch (information.shaderType) {
+                .glsl => try writer.print("\tpub const SourceType: ReflectionType.ShaderType = .glsl;\n", .{}),
+                .spirv => try writer.print("\tpub const SourceType: ReflectionType.ShaderType = .spirv;\n", .{}),
+            }
+            try ReflectSource.reflectShaderSource(shadersInformation, writer);
+        },
         else => {},
     }
 

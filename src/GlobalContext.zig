@@ -13,6 +13,7 @@ pub const ComputePipeline = @import("Pipeline/ComputePipeline.zig");
 pub const Sampler = @import("Resources/Sampler.zig");
 pub const Buffer = @import("Resources/Buffer.zig");
 pub const Framebuffer = @import("Resources/Framebuffer.zig");
+pub const Shader = @import("Resources/Shader.zig");
 pub const SparseTextureArray = @import("Resources/SparseArrayTexture.zig");
 
 pub const Tools = @import("Tools/ReflectShaderToStruct.zig");

@@ -1,6 +1,7 @@
 const std = @import("std");
 const gl = @import("../gl4_6.zig");
 const ShaderStage = @import("PipelineInformation.zig").ShaderStage;
+pub const ShaderType = @import("../Resources/Shader.zig").ShaderType;
 
 pub const ShaderInput = struct {
     name: []const u8,
