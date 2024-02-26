@@ -204,13 +204,13 @@ pub const Commands = struct {
         }
     }
 
-    pub fn BindVertexBuffer(binding: u32, buffer: Buffer, offset: usize, stride: usize) void {
+    pub fn BindVertexBuffer(binding: u32, buffer: Buffer, offset: usize) void {
         gl.vertexArrayVertexBuffer(
             __context.bondVertexArrayObject.handle,
             binding,
             buffer.handle,
             @intCast(offset),
-            @intCast(stride),
+            @intCast(buffer.stride),
         );
     }
 

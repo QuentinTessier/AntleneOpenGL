@@ -9,6 +9,7 @@ const ReflectSource = @import("./ReflectSource.zig");
 
 pub const ShaderInformation = struct {
     stage: ShaderStage,
+    path: []const u8,
     source: ShaderSource,
 };
 
@@ -411,12 +412,12 @@ pub fn reflect(allocator: std.mem.Allocator, information: ReflectionInformation,
             .glsl => {
                 const tmp = try Shader.fromGLSLFileKeepSource(allocator, shader);
                 shaders[index] = tmp.handle;
-                shadersInformation[index] = .{ .stage = tmp.stage, .source = .{ .glsl = tmp.source } };
+                shadersInformation[index] = .{ .stage = tmp.stage, .path = shader, .source = .{ .glsl = tmp.source } };
             },
             .spirv => {
                 const tmp = try Shader.fromSPIRVFileKeepSource(allocator, shader);
                 shaders[index] = tmp.handle;
-                shadersInformation[index] = .{ .stage = tmp.stage, .source = .{ .spirv = tmp.source } };
+                shadersInformation[index] = .{ .stage = tmp.stage, .path = shader, .source = .{ .spirv = tmp.source } };
             },
         }
     }
@@ -480,6 +481,7 @@ pub fn reflect(allocator: std.mem.Allocator, information: ReflectionInformation,
             }
             try ReflectSource.reflectShaderSource(shadersInformation, writer);
         },
+        .ShaderPath => try ReflectSource.reflectShaderPath(ShaderInformation, writer),
         else => {},
     }
 

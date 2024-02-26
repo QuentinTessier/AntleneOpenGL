@@ -7,6 +7,7 @@ const ShaderInformation = @import("./ReflectShaderToStruct.zig").ShaderInformati
 
 pub const StoreShaderSource = enum {
     None,
+    ShaderPath,
     ShaderSource,
     ProgramBinary,
 };
@@ -50,5 +51,16 @@ pub fn reflectShaderSource(shadersInformation: []const ShaderInformation, writer
                 try writer.print("\t}};\n", .{});
             },
         }
+    }
+}
+
+pub fn reflectShaderPath(shadersInformation: []const ShaderInformation, writer: anytype) !void {
+    for (shadersInformation) |info| {
+        const stage_name = switch (info.stage) {
+            .Vertex => "VertexShaderPath",
+            .Fragment => "FragmentShaderPath",
+            .Compute => "ComputeShaderPath",
+        };
+        try writer.print("pub const {s} = \"{s}\"", .{ stage_name, info.path });
     }
 }
