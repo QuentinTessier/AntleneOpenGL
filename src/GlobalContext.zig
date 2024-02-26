@@ -24,9 +24,30 @@ const PipelineInformation = @import("Pipeline/PipelineInformation.zig");
 var __initialized: bool = false;
 var __context: Context = undefined;
 
+fn checkExtensionSupport() bool {
+    var n: i32 = 0;
+    gl.getIntegerv(gl.NUM_EXTENSIONS, @ptrCast(&n));
+
+    var found: bool = false;
+    for (0..@intCast(n)) |index| {
+        const ext = gl.getStringi(gl.EXTENSIONS, @intCast(index));
+        if (ext) |name| {
+            const len = std.mem.len(name);
+            if (std.mem.startsWith(u8, name[0..len], "GL_ARB_bindless_texture")) {
+                found = true;
+                break;
+            }
+        }
+    }
+    return found;
+}
+
 pub fn init(allocator: std.mem.Allocator, comptime loadFunc: fn (void, [:0]const u8) ?glFunctionPointer) !void {
     if (!__initialized) {
         try gl.load(void{}, loadFunc);
+
+        try gl.GL_ARB_bindless_texture.load(void{}, loadFunc);
+
         gl.enable(gl.DEBUG_OUTPUT);
         gl.debugMessageCallback(DebugMessenger.callback, null);
 
@@ -68,6 +89,14 @@ pub const Resources = struct {
     pub inline fn CreateFramebuffer(name: ?[]const u8, info: Framebuffer.FramebufferCreateInfo) !Framebuffer {
         return __context.createFramebuffer(name, info);
     }
+
+    pub const DrawElementsIndirectCommand = struct {
+        count: u32,
+        instanceCount: u32,
+        firstIndex: u32,
+        baseVertex: i32,
+        baseInstance: u32,
+    };
 };
 
 pub const Rendering = struct {
@@ -151,25 +180,27 @@ pub const Commands = struct {
         try __context.bindTextureBase(@field(ReflectedProgram, name), texture);
     }
 
-    pub const BufferBindingInformation = union(enum(u32)) {
-        whole: void,
-        range: struct {
-            offset: usize,
-            size: usize,
-        },
+    pub const BufferBindingType = enum {
+        whole,
+        range,
     };
 
-    pub fn BindStorageBuffer(binding: u32, buffer: Buffer, info: BufferBindingInformation) void {
+    pub const BufferRange = struct {
+        offset: usize = 0,
+        size: usize = 0,
+    };
+
+    pub fn BindStorageBuffer(binding: u32, buffer: Buffer, info: BufferBindingType, range: BufferRange) void {
         switch (info) {
             .whole => gl.bindBufferBase(gl.SHADER_STORAGE_BUFFER, binding, buffer.handle),
-            .range => |range| gl.bindBufferRange(gl.SHADER_STORAGE_BUFFER, binding, buffer.handle, @intCast(range.offset), @intCast(range.size)),
+            .range => gl.bindBufferRange(gl.SHADER_STORAGE_BUFFER, binding, buffer.handle, @intCast(range.offset), @intCast(range.size)),
         }
     }
 
-    pub fn BindUniformBuffer(binding: u32, buffer: Buffer, info: BufferBindingInformation) void {
+    pub fn BindUniformBuffer(binding: u32, buffer: Buffer, info: BufferBindingType, range: BufferRange) void {
         switch (info) {
             .whole => gl.bindBufferBase(gl.UNIFORM_BUFFER, binding, buffer.handle),
-            .range => |range| gl.bindBufferRange(gl.UNIFORM_BUFFER, binding, buffer.handle, @intCast(range.offset), @intCast(range.size)),
+            .range => gl.bindBufferRange(gl.UNIFORM_BUFFER, binding, buffer.handle, @intCast(range.offset), @intCast(range.size)),
         }
     }
 
@@ -220,7 +251,7 @@ pub const Commands = struct {
         gl.drawArraysIndirect(@intFromEnum(__context.currentTopology), null);
     }
 
-    pub fn DrawElements(count: usize, instanceCount: usize, firstIndex: usize, baseVertex: usize, baseInstance: usize) void {
+    pub fn DrawElements(count: u32, instanceCount: u32, firstIndex: u32, baseVertex: i32, baseInstance: u32) void {
         gl.drawElementsInstancedBaseVertexBaseInstance(
             @intFromEnum(__context.currentTopology),
             @intCast(count),
@@ -258,6 +289,7 @@ pub const Commands = struct {
         gl.bindBuffer(gl.DRAW_INDIRECT_BUFFER, commands.handle);
         gl.multiDrawElementsIndirect(
             @intFromEnum(__context.currentTopology),
+            @intFromEnum(__context.currentElementType),
             @ptrFromInt(commandOffset * commandStride),
             @intCast(commandCount),
             @intCast(commandStride),

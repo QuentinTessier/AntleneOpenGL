@@ -166,12 +166,16 @@ pub fn init(info: TextureCreateInfo) Texture {
     };
 }
 
+pub fn generateBindlessHandle(self: *Texture) void {
+    self.bindlessHandle = gl.GL_ARB_bindless_texture.getTextureHandleARB(self.handle);
+    gl.GL_ARB_bindless_texture.makeTextureHandleResidentARB(self.bindlessHandle);
+}
+
 pub const TextureInternalFormat = enum(u32) {
     r = gl.RED,
     rg = gl.RG,
     rgb = gl.RGB,
     rgba = gl.RGBA,
-    brga = gl.BRGA,
     depth = gl.DEPTH_COMPONENT,
     stencil = gl.STENCIL_INDEX,
 };
@@ -210,6 +214,10 @@ pub const TextureUpdateInformation = struct {
 pub fn update(self: Texture, info: TextureUpdateInformation) void {
     gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
     gl.pixelStorei(gl.PACK_ALIGNMENT, 1);
+    defer {
+        gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
+        gl.pixelStorei(gl.PACK_ALIGNMENT, 4);
+    }
     switch (self.createInfo.type) {
         ._2D, ._1DArray, .cubeMap => gl.textureSubImage2D(
             self.handle,
@@ -242,8 +250,8 @@ pub fn update(self: Texture, info: TextureUpdateInformation) void {
 
 pub fn deinit(self: Texture) void {
     if (self.handle == 0) return;
-    //if (self.bindlessHandle != 0) {
-    //    gl.makeTextureHandleNonResidentARB(self.bindlessHandle);
-    //}
+    if (self.bindlessHandle != 0) {
+        gl.GL_ARB_bindless_texture.makeTextureHandleNonResidentARB(self.bindlessHandle);
+    }
     gl.deleteTextures(1, @ptrCast(&self.handle));
 }
