@@ -26,11 +26,11 @@ pub fn reflectProgram(allocator: std.mem.Allocator, _: []const u8, program: u32,
 
     gl.getProgramBinary(program, @intCast(len), null, @ptrCast(&format), buffer.ptr);
 
-    try writer.print("\tpub const ProgramBinary: [{}]u32 = .{{", .{buffer.len});
+    try writer.print("\t\t\tpub const ProgramBinary: [{}]u32 = .{{", .{buffer.len});
     for (buffer) |data| {
         try writer.print("0x{X},", .{data});
     }
-    try writer.print("\n\t}};\n", .{});
+    try writer.print("\t\t\t}};\n", .{});
 }
 
 pub fn reflectShaderSource(shadersInformation: []const ShaderInformation, writer: anytype) !void {
@@ -42,13 +42,13 @@ pub fn reflectShaderSource(shadersInformation: []const ShaderInformation, writer
         };
 
         switch (info.source) {
-            .glsl => |glsl| try writer.print("\tpub const {s}: []const u8 = \"{s}\"", .{ stage_name, glsl }),
+            .glsl => |glsl| try writer.print("\t\t\t\tpub const {s}: []const u8 = \"{s}\"", .{ stage_name, glsl }),
             .spirv => |spirv| {
-                try writer.print("\tpub const {s}: []const u32 = &.{{\n", .{stage_name});
+                try writer.print("\t\t\tpub const {s}: []const u32 = &.{{\n", .{stage_name});
                 for (spirv) |opcode| {
-                    try writer.print("\t\t0x{X},\n", .{opcode});
+                    try writer.print("\t\t\t\t\t0x{X},\n", .{opcode});
                 }
-                try writer.print("\t}};\n", .{});
+                try writer.print("\t\t\t}};\n", .{});
             },
         }
     }
@@ -61,6 +61,26 @@ pub fn reflectShaderPath(shadersInformation: []const ShaderInformation, writer: 
             .Fragment => "FragmentShaderPath",
             .Compute => "ComputeShaderPath",
         };
-        try writer.print("pub const {s} = \"{s}\"", .{ stage_name, info.path });
+        try writer.print("\t\t\tpub const {s} = \"{s}\"", .{ stage_name, info.path });
+    }
+}
+
+pub fn reflectShaderData(store: StoreShaderSource, shadersInformation: []const ShaderInformation, writer: anytype) !void {
+    switch (store) {
+        .ShaderPath => {
+            try writer.print("\tpub const ShaderData: []const ReflectionType.ShaderPath = .{{", .{});
+            for (shadersInformation) |info| {
+                try writer.print("\n\t\t\"{s}\"", .{info.path});
+            }
+            try writer.print("\n\t}};\n", .{});
+        },
+        //.ShaderSource => {
+        //    try writer.print("\tpub const Shaders: []const ReflectionType.ShaderStorage = .{{", .{});
+        //    for (shadersInformation) |info| {
+        //        try writer.print("\n\t\t.{{ .stage = {}, .source = .{ } }}", .{info.path});
+        //    }
+        //    try writer.print("\t}};\n", .{});
+        //},
+        else => {},
     }
 }
