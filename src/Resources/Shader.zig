@@ -1,6 +1,7 @@
 const std = @import("std");
 const gl = @import("../gl4_6.zig");
 const ShaderStage = @import("../Pipeline/PipelineInformation.zig").ShaderStage;
+const ReflectionType = @import("../Pipeline/ReflectionType.zig");
 
 pub const ShaderType = enum {
     glsl,
@@ -22,7 +23,7 @@ pub fn fromGLSLSource(stage: ShaderStage, source: []const u8) !u32 {
         return error.FailedShaderCompilation;
     }
 
-    return 0;
+    return shader;
 }
 
 pub fn fromSPIRVSource(stage: ShaderStage, source: []const u8) !u32 {
@@ -155,6 +156,14 @@ pub fn fromSPIRVFileKeepSource(allocator: std.mem.Allocator, path: []const u8) !
     };
 }
 
+pub fn fromFile(allocator: std.mem.Allocator, path: []const u8) !u32 {
+    if (std.mem.endsWith(u8, path, ".spv")) {
+        return fromSPIRVFile(allocator, path);
+    } else {
+        return fromGLSLFile(allocator, path);
+    }
+}
+
 pub fn linkProgram(shaders: []const u32) !u32 {
     const program = gl.createProgram();
     for (shaders) |shader| {
@@ -172,8 +181,51 @@ pub fn linkProgram(shaders: []const u32) !u32 {
             return error.ProgramLinkingFailed;
         }
     }
-    for (shaders) |shader| {
-        gl.deleteShader(shader);
-    }
     return program;
+}
+
+pub fn getProgramFromReflected(comptime Reflection: type, allocator: std.mem.Allocator) !u32 {
+    if (!@hasDecl(Reflection, "ShaderData")) @panic("All Reflection type should have a ShaderData declaration");
+
+    const ShaderData = Reflection.ShaderData;
+    if (@typeInfo(@TypeOf(ShaderData)) != .Array) @panic("All Reflection.ShaderData should be a slice of either ShaderPath or ShaderStorage");
+    switch (@typeInfo(@TypeOf(ShaderData)).Array.child) {
+        ReflectionType.ShaderPath => {
+            var shaders: [ShaderData.len]u32 = [1]u32{0} ** ShaderData.len;
+            errdefer {
+                for (shaders) |shader| {
+                    gl.deleteShader(shader);
+                }
+            }
+            for (ShaderData, 0..) |path, i| {
+                shaders[i] = try fromFile(allocator, path);
+            }
+            const program = try linkProgram(&shaders);
+            for (shaders) |shader| {
+                gl.deleteShader(shader);
+            }
+            return program;
+        },
+        ReflectionType.ShaderStorage => {
+            var shaders: [ShaderData.len]u32 = [1]u32{0} ** ShaderData.len;
+            errdefer {
+                for (shaders) |shader| {
+                    gl.deleteShader(shader);
+                }
+            }
+
+            for (ShaderData, 0..) |storage, i| {
+                shaders[i] = switch (storage.source) {
+                    .glsl => try fromGLSLSource(storage.stage, storage.slice()),
+                    .spirv => try fromSPIRVSource(storage.stage, storage.slice()),
+                };
+            }
+            const program = try linkProgram(&shaders);
+            for (shaders) |shader| {
+                gl.deleteShader(shader);
+            }
+            return program;
+        },
+        else => @panic("Invalid ShaderData type"),
+    }
 }

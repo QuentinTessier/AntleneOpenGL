@@ -153,7 +153,7 @@ pub fn renderToSwapchain(self: *Context, info: SwapchainRenderingInformation, pa
     switch (info.depthLoadOp) {
         .keep => {},
         .clear => {
-            gl.clearNamedFramebufferfv(0, gl.DEPTH, 0, @ptrCast(&info.clearColor));
+            gl.clearNamedFramebufferfv(0, gl.DEPTH, 0, @ptrCast(&info.clearDepthValue));
         },
         .dontCare => {
             const value: u32 = gl.DEPTH;

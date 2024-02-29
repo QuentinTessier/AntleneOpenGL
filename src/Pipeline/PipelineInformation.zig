@@ -1,5 +1,6 @@
 const std = @import("std");
 const gl = @import("../gl4_6.zig");
+const ReflectionType = @import("./ReflectionType.zig");
 
 pub const ShaderStage = enum(u32) {
     Vertex = gl.VERTEX_SHADER,
@@ -18,6 +19,15 @@ pub const VertexInputFormat = enum(u32) {
     fixed = gl.FIXED,
     f32 = gl.FLOAT,
     f64 = gl.DOUBLE,
+
+    pub fn getSize(self: VertexInputFormat) u32 {
+        return switch (self) {
+            .i8, .u8 => 1,
+            .i16, .u16 => 2,
+            .i32, .u32, .f32, .fixed => 4,
+            .f64 => 8,
+        };
+    }
 };
 
 pub const VertexInputAttributeDescription = struct {
@@ -30,6 +40,97 @@ pub const VertexInputAttributeDescription = struct {
 
 pub const PipelineVertexInputState = struct {
     vertexAttributeDescription: []const VertexInputAttributeDescription,
+
+    const InputRate = struct {
+        format: VertexInputFormat,
+        count: u32,
+        offset: u32,
+    };
+    fn getInputRate(input: ReflectionType.ShaderInput) InputRate {
+        const format = switch (input.type) {
+            .i32,
+            .vec2_i32,
+            .vec3_i32,
+            .vec4_i32,
+            => VertexInputFormat.i32,
+
+            .u32,
+            .vec2_u32,
+            .vec3_u32,
+            .vec4_u32,
+            => VertexInputFormat.u32,
+
+            .f32,
+            .vec2_f32,
+            .vec3_f32,
+            .vec4_f32,
+            .mat2_f32,
+            .mat3_f32,
+            .mat4_f32,
+            .mat2x3_f32,
+            .mat2x4_f32,
+            .mat3x2_f32,
+            .mat3x4_f32,
+            .mat4x2_f32,
+            .mat4x3_f32,
+            => VertexInputFormat.f32,
+
+            .f64,
+            .mat2_f64,
+            .mat3_f64,
+            .mat4_f64,
+            .mat2x3_f64,
+            .mat2x4_f64,
+            .mat3x2_f64,
+            .mat3x4_f64,
+            .mat4x2_f64,
+            .mat4x3_f64,
+            .vec2_f64,
+            .vec3_f64,
+            .vec4_f64,
+            => VertexInputFormat.f64,
+
+            else => VertexInputFormat.u8,
+        };
+
+        const count: u32 = switch (input.type) {
+            .i32, .u32, .f32, .f64 => 1,
+            .vec2_i32, .vec2_u32, .vec2_f32, .vec2_f64 => 2,
+            .vec3_i32, .vec3_u32, .vec3_f32, .vec3_f64 => 3,
+            .vec4_i32, .vec4_u32, .vec4_f32, .vec4_f64 => 4,
+            else => 0,
+        };
+
+        const offset = format.getSize() * count;
+
+        return .{
+            .format = format,
+            .count = count,
+            .offset = offset,
+        };
+    }
+
+    pub fn fromReflected(comptime Reflection: type) PipelineVertexInputState {
+        if (!@hasDecl(Reflection, "Input")) @panic("Missing Input declaration");
+
+        const Input = Reflection.Input;
+        var vertexAttributeDescription: [Input.len]VertexInputAttributeDescription = [1]VertexInputAttributeDescription{undefined} ** Input.len;
+
+        inline for (Input, 0..) |input, i| {
+            const inputRate = getInputRate(input);
+            vertexAttributeDescription[i] = .{
+                .location = input.location,
+                .binding = 0,
+                .format = inputRate.format,
+                .size = inputRate.count,
+                .offset = inputRate.offset,
+            };
+        }
+
+        return .{
+            .vertexAttributeDescription = &vertexAttributeDescription,
+        };
+    }
 };
 
 pub const PrimitiveTopology = enum(u32) {
@@ -239,6 +340,15 @@ pub const GraphicPipelineInformation = struct {
 
     inputAssemblyState: PipelineInputAssemblyState = .{},
     vertexInputState: PipelineVertexInputState,
+    rasterizationState: PipelineRasterizationState = .{},
+    multiSampleState: PipelineMultisampleState = .{},
+    depthState: PipelineDepthState = .{},
+    stencilState: PipelineStencilState = .{},
+    colorBlendState: PipelineColorBlendState = .{},
+};
+
+pub const TypedGraphicPipelineInformation = struct {
+    inputAssemblyState: PipelineInputAssemblyState = .{},
     rasterizationState: PipelineRasterizationState = .{},
     multiSampleState: PipelineMultisampleState = .{},
     depthState: PipelineDepthState = .{},

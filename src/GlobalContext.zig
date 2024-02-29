@@ -9,6 +9,7 @@ pub const glFunctionPointer = gl.FunctionPointer;
 pub const Texture = Context.Texture;
 pub const Extent = Texture.Extent;
 pub const GraphicPipeline = @import("Pipeline/GraphicPipeline.zig");
+pub const TypedGraphicPipeline = @import("Pipeline/TypedGraphicPipeline.zig").TypedGraphicPipeline;
 pub const ComputePipeline = @import("Pipeline/ComputePipeline.zig");
 pub const Sampler = @import("Resources/Sampler.zig");
 pub const Buffer = @import("Resources/Buffer.zig");
@@ -19,7 +20,9 @@ pub const SparseTextureArray = @import("Resources/SparseArrayTexture.zig");
 pub const Tools = @import("Tools/ReflectShaderToStruct.zig");
 pub const ReflectionType = @import("Pipeline/ReflectionType.zig");
 
-const PipelineInformation = @import("Pipeline/PipelineInformation.zig");
+pub const PipelineInformation = @import("Pipeline/PipelineInformation.zig");
+
+pub const GenericTexture = @import("./Resources/Texture/GenericTexture.zig");
 
 var __initialized: bool = false;
 var __context: Context = undefined;
@@ -64,6 +67,10 @@ pub fn deinit() void {
 pub const Resources = struct {
     pub fn CreateGraphicPipeline(info: PipelineInformation.GraphicPipelineInformation) !Context.GraphicPipeline {
         return __context.caches.createGraphicPipeline(__context.allocator, info);
+    }
+
+    pub fn CreateTypedGraphicPipeline(comptime Reflection: type, info: PipelineInformation.TypedGraphicPipelineInformation) !TypedGraphicPipeline(Reflection) {
+        return __context.caches.createTypedGraphicPipeline(Reflection, __context.allocator, info);
     }
 
     pub fn CreateTexture(info: Texture.TextureCreateInfo) Texture {

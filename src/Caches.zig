@@ -3,6 +3,7 @@ const gl = @import("gl4_6.zig");
 
 pub const ComputePipeline = @import("./Pipeline/ComputePipeline.zig");
 pub const GraphicPipeline = @import("./Pipeline/GraphicPipeline.zig");
+pub const TypedGraphicPipeline = @import("./Pipeline/TypedGraphicPipeline.zig").TypedGraphicPipeline;
 const PipelineInformation = @import("./Pipeline/PipelineInformation.zig");
 
 pub const Buffer = @import("Resources/Buffer.zig");
@@ -43,6 +44,16 @@ pub fn createGraphicPipeline(self: *Caches, allocator: std.mem.Allocator, info: 
         vao_entry.value_ptr.* = VertexArrayObject.init(info.vertexInputState);
     }
     return GraphicPipeline.init(allocator, info, vao_entry.value_ptr.*);
+}
+
+pub fn createTypedGraphicPipeline(self: *Caches, comptime Reflection: type, allocator: std.mem.Allocator, info: PipelineInformation.TypedGraphicPipelineInformation) !TypedGraphicPipeline(Reflection) {
+    const vertexInputState = comptime PipelineInformation.PipelineVertexInputState.fromReflected(Reflection);
+    const vao_hash = VertexArrayObject.hash(vertexInputState);
+    const vao_entry = try self.vertexArrayObjectCache.getOrPut(allocator, vao_hash);
+    if (!vao_entry.found_existing) {
+        vao_entry.value_ptr.* = VertexArrayObject.init(vertexInputState);
+    }
+    return TypedGraphicPipeline(Reflection).init(allocator, info, vertexInputState, vao_entry.value_ptr.*);
 }
 
 pub fn createComputePipeline(_: *Caches, _: std.mem.Allocator, info: PipelineInformation.ComputePipelineInformation) !ComputePipeline {

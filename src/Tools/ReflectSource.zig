@@ -68,9 +68,9 @@ pub fn reflectShaderPath(shadersInformation: []const ShaderInformation, writer: 
 pub fn reflectShaderData(store: StoreShaderSource, shadersInformation: []const ShaderInformation, writer: anytype) !void {
     switch (store) {
         .ShaderPath => {
-            try writer.print("\tpub const ShaderData: []const ReflectionType.ShaderPath = .{{", .{});
+            try writer.print("\tpub const ShaderData: [{}]ReflectionType.ShaderPath = .{{", .{shadersInformation.len});
             for (shadersInformation) |info| {
-                try writer.print("\n\t\t\"{s}\"", .{info.path});
+                try writer.print("\n\t\t\"{s}\",", .{info.path});
             }
             try writer.print("\n\t}};\n", .{});
         },

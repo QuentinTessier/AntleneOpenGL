@@ -2,10 +2,16 @@ const std = @import("std");
 const gl = @import("../gl4_6.zig");
 const ReflectionType = @import("../Pipeline/ReflectionType.zig");
 
+const TMPShaderIO = struct {
+    name: []const u8,
+    location: i32,
+    type: ReflectionType.GLSLType,
+};
+
 pub fn shaderInput(allocator: std.mem.Allocator, program: u32, writer: anytype) !void {
     var nActiveResources: i32 = 0;
     gl.getProgramInterfaceiv(program, gl.PROGRAM_INPUT, gl.ACTIVE_RESOURCES, @ptrCast(&nActiveResources));
-    var array = std.ArrayList(ReflectionType.ShaderInput).init(allocator);
+    var array = std.ArrayList(TMPShaderIO).init(allocator);
     defer {
         for (array.items) |item| {
             allocator.free(item.name);
@@ -13,7 +19,7 @@ pub fn shaderInput(allocator: std.mem.Allocator, program: u32, writer: anytype) 
         array.deinit();
     }
 
-    try writer.print("\tpub const Input: []ReflectionType.ShaderInput = &.{{\n", .{});
+    try writer.print("\tpub const Input: []const ReflectionType.ShaderInput = &.{{\n", .{});
     for (0..@intCast(nActiveResources)) |i| {
         const name = blk: {
             const name_length: i32 = name_length_blk: {
@@ -68,8 +74,8 @@ pub fn shaderInput(allocator: std.mem.Allocator, program: u32, writer: anytype) 
             },
         });
     }
-    std.sort.insertion(ReflectionType.ShaderInput, array.items, void{}, struct {
-        pub fn order(_: void, lhs: ReflectionType.ShaderInput, rhs: ReflectionType.ShaderInput) bool {
+    std.sort.insertion(TMPShaderIO, array.items, void{}, struct {
+        pub fn order(_: void, lhs: TMPShaderIO, rhs: TMPShaderIO) bool {
             return lhs.location < rhs.location;
         }
     }.order);
@@ -88,7 +94,7 @@ pub fn shaderInput(allocator: std.mem.Allocator, program: u32, writer: anytype) 
 pub fn shaderOutput(allocator: std.mem.Allocator, program: u32, writer: anytype) !void {
     var nActiveResources: i32 = 0;
     gl.getProgramInterfaceiv(program, gl.PROGRAM_OUTPUT, gl.ACTIVE_RESOURCES, @ptrCast(&nActiveResources));
-    var array = std.ArrayList(ReflectionType.ShaderInput).init(allocator);
+    var array = std.ArrayList(TMPShaderIO).init(allocator);
     defer {
         for (array.items) |item| {
             allocator.free(item.name);
@@ -96,7 +102,7 @@ pub fn shaderOutput(allocator: std.mem.Allocator, program: u32, writer: anytype)
         array.deinit();
     }
 
-    try writer.print("\tpub const Output: []ReflectionType.ShaderOutput = &.{{\n", .{});
+    try writer.print("\tpub const Output: []const ReflectionType.ShaderOutput = &.{{\n", .{});
     for (0..@intCast(nActiveResources)) |i| {
         const name = blk: {
             const name_length: i32 = name_length_blk: {
@@ -151,8 +157,8 @@ pub fn shaderOutput(allocator: std.mem.Allocator, program: u32, writer: anytype)
             },
         });
     }
-    std.sort.insertion(ReflectionType.ShaderInput, array.items, void{}, struct {
-        pub fn order(_: void, lhs: ReflectionType.ShaderInput, rhs: ReflectionType.ShaderInput) bool {
+    std.sort.insertion(TMPShaderIO, array.items, void{}, struct {
+        pub fn order(_: void, lhs: TMPShaderIO, rhs: TMPShaderIO) bool {
             return lhs.location < rhs.location;
         }
     }.order);
