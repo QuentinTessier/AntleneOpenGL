@@ -6,6 +6,27 @@ const hash = @import("GraphicPipeline.zig").hash;
 const Shader = @import("../Resources/Shader.zig");
 const GraphicPipeline = @import("./GraphicPipeline.zig");
 
+// The current Reflection API isn't seamlessly included with the build system and requires some more work.
+// Here the base code to generate a zig file for a Pipeline
+//  const Graphics = @import("this_module_name");
+//
+//  try Graphics.Tools.reflect(allocator, .{
+//      .libraryName = "this_module_name",
+//      .namespace = "pipeline_name",
+//      .shaderType = .glsl,
+//      .shaders = &.{ "./src/shaders/vertex.vert", "./src/shaders/fragment.frag" },
+//      .source = .ShaderPath,
+//  }, std.io.getStdOut().writer());
+//
+// Then this can be used simply like this:
+// const Reflected = @import("reflection_file_path");
+// const Pipeline = Graphics.TypedGraphicPipeline(Reflected);
+// const p = try Graphics.Resources.CreateTypedGraphicPipeline(Reflected, .{});
+// defer p.deinit();
+//
+// Bindings, location, object types, can be access from:
+// Pipeline.ReflectedType
+
 pub fn TypedGraphicPipeline(comptime Reflection: type) type {
     return struct {
         pub const ReflectedType = Reflection;
@@ -24,6 +45,7 @@ pub fn TypedGraphicPipeline(comptime Reflection: type) type {
 
         pub fn init(allocator: std.mem.Allocator, info: Information.TypedGraphicPipelineInformation, vertexInputState: Information.PipelineVertexInputState, vao: VertexArrayObject) !@This() {
             const program = try Shader.getProgramFromReflected(Reflection, allocator);
+            const h = hash(info, vertexInputState, "", "");
 
             if (std.debug.runtime_safety) {
                 const typename = @typeName(Reflection);
@@ -34,7 +56,7 @@ pub fn TypedGraphicPipeline(comptime Reflection: type) type {
 
             return .{
                 .handle = program,
-                .hash = 0,
+                .hash = h,
                 .vao = vao,
                 .inputAssemblyState = info.inputAssemblyState,
                 .vertexInputState = vertexInputState,

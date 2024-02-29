@@ -345,6 +345,17 @@ pub const GraphicPipelineInformation = struct {
     depthState: PipelineDepthState = .{},
     stencilState: PipelineStencilState = .{},
     colorBlendState: PipelineColorBlendState = .{},
+
+    pub fn toTypedGraphicPipelineInformation(self: GraphicPipelineInformation) TypedGraphicPipelineInformation {
+        return .{
+            .inputAssemblyState = self.inputAssemblyState,
+            .rasterizationState = self.rasterizationState,
+            .multiSampleState = self.multiSampleState,
+            .depthState = self.depthState,
+            .stencilState = self.stencilState,
+            .colorBlendState = self.colorBlendState,
+        };
+    }
 };
 
 pub const TypedGraphicPipelineInformation = struct {

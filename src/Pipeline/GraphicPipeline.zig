@@ -26,51 +26,21 @@ uniformBlocks: std.StringArrayHashMapUnmanaged(Handle) = .{},
 shaderStorageBlocks: std.StringArrayHashMapUnmanaged(Handle) = .{},
 samplers: std.StringArrayHashMapUnmanaged(Handle) = .{},
 
-// Try to create all pipeline up-front, since we need to alloc to generate the hash.
-// We needs a better way to create a repeatable id or something of the sort.
-pub inline fn hash(allocator: std.mem.Allocator, info: GraphicPipelineInformation) !u64 {
-    const size =
-        @sizeOf(Information.PipelineInputAssemblyState) +
-        @sizeOf(Information.PipelineRasterizationState) +
-        @sizeOf(Information.PipelineMultisampleState) +
-        @sizeOf(Information.PipelineDepthState) +
-        @sizeOf(Information.PipelineStencilState) +
-        @sizeOf(Information.PipelineColorBlendState) +
-        @sizeOf(Information.VertexInputAttributeDescription) * info.vertexInputState.vertexAttributeDescription.len +
-        info.vertexShaderSource.len() + info.fragmentShaderSource.len();
+pub inline fn hash(
+    info: Information.TypedGraphicPipelineInformation,
+    vertexInputState: Information.PipelineVertexInputState,
+    vertexShaderSource: []const u8,
+    fragmentShaderSource: []const u8,
+) u64 {
+    var h: u64 = 0;
+    inline for (std.meta.fields(Information.TypedGraphicPipelineInformation)) |field| {
+        h = @addWithOverflow(h, std.hash.Murmur2_64.hash(std.mem.asBytes(&@field(info, field.name))))[0];
+    }
+    h = @addWithOverflow(h, std.hash.Murmur2_64.hash(std.mem.sliceAsBytes(vertexInputState.vertexAttributeDescription)))[0];
+    h = @addWithOverflow(h, std.hash.Murmur2_64.hash(vertexShaderSource))[0];
+    h = @addWithOverflow(h, std.hash.Murmur2_64.hash(fragmentShaderSource))[0];
 
-    const buffer = try allocator.alloc(u8, size);
-    defer allocator.free(buffer);
-    var offset: usize = 0;
-
-    @memcpy(buffer[0..@sizeOf(Information.PipelineInputAssemblyState)], std.mem.asBytes(&info.inputAssemblyState));
-    offset += @sizeOf(Information.PipelineInputAssemblyState);
-
-    @memcpy(buffer[offset .. offset + @sizeOf(Information.VertexInputAttributeDescription) * info.vertexInputState.vertexAttributeDescription.len], std.mem.sliceAsBytes(info.vertexInputState.vertexAttributeDescription));
-    offset += @sizeOf(Information.VertexInputAttributeDescription) * info.vertexInputState.vertexAttributeDescription.len;
-
-    @memcpy(buffer[offset .. offset + @sizeOf(Information.PipelineRasterizationState)], std.mem.asBytes(&info.rasterizationState));
-    offset += @sizeOf(Information.PipelineRasterizationState);
-
-    @memcpy(buffer[offset .. offset + @sizeOf(Information.PipelineMultisampleState)], std.mem.asBytes(&info.multiSampleState));
-    offset += @sizeOf(Information.PipelineMultisampleState);
-
-    @memcpy(buffer[offset .. offset + @sizeOf(Information.PipelineDepthState)], std.mem.asBytes(&info.depthState));
-    offset += @sizeOf(Information.PipelineDepthState);
-
-    @memcpy(buffer[offset .. offset + @sizeOf(Information.PipelineStencilState)], std.mem.asBytes(&info.stencilState));
-    offset += @sizeOf(Information.PipelineStencilState);
-
-    @memcpy(buffer[offset .. offset + @sizeOf(Information.PipelineColorBlendState)], std.mem.asBytes(&info.colorBlendState));
-    offset += @sizeOf(Information.PipelineColorBlendState);
-
-    @memcpy(buffer[offset .. offset + info.vertexShaderSource.len()], info.vertexShaderSource.slice());
-    offset += info.vertexShaderSource.len();
-
-    @memcpy(buffer[offset .. offset + info.fragmentShaderSource.len()], info.fragmentShaderSource.slice());
-    offset += info.fragmentShaderSource.len();
-
-    return std.hash.Murmur2_64.hash(buffer);
+    return h;
 }
 
 pub fn init(allocator: std.mem.Allocator, info: GraphicPipelineInformation, vao: VertexArrayObject) !GraphicPipeline {
@@ -87,7 +57,7 @@ pub fn init(allocator: std.mem.Allocator, info: GraphicPipelineInformation, vao:
         }
     }
 
-    const h = try hash(allocator, info);
+    const h = hash(info.toTypedGraphicPipelineInformation(), info.vertexInputState, info.vertexShaderSource, info.fragmentShaderSource);
     std.log.info("Created new pipeline with hash {}", .{h});
     return .{
         .handle = program,
