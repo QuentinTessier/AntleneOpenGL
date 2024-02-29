@@ -164,27 +164,16 @@ pub const Commands = struct {
         __context.bindComputePipeline(pipeline);
     }
 
+    pub fn BindTypedGraphicPipeline(pipeline: anytype) void {
+        __context.bindGraphicPipeline(pipeline.toGraphicPipeline());
+    }
+
     pub fn BindTexture(name: []const u8, texture: Texture) !void {
         try __context.bindTexture(name, texture);
     }
 
     pub fn BindSampledTexture(name: []const u8, texture: Texture, sampler: u64) !void {
         try __context.bindSampledTexture(name, texture, sampler);
-    }
-
-    pub fn BindReflectedSampledTexture(comptime ReflectedProgram: type, comptime tag: anytype, texture: Texture, sampler: u64) !void {
-        const name = @tagName(tag);
-        if (!@hasDecl(ReflectedProgram, name)) @panic("Trying to bind SampledTexture to reflected shader " ++ @typeName(ReflectedProgram) ++ ", " ++ name ++ " isn't defined.");
-
-        const sampler_object = try __context.getSampler(sampler);
-        try __context.bindSampledTextureBase(@field(ReflectedProgram, name), texture, sampler_object.handle);
-    }
-
-    pub fn BindReflectedTexture(comptime ReflectedProgram: type, comptime tag: anytype, texture: Texture) !void {
-        const name = @tagName(tag);
-        if (!@hasDecl(ReflectedProgram, name)) @panic("Trying to bind SampledTexture to reflected shader " ++ @typeName(ReflectedProgram) ++ ", " ++ name ++ " isn't defined.");
-
-        try __context.bindTextureBase(@field(ReflectedProgram, name), texture);
     }
 
     pub const BufferBindingType = enum {

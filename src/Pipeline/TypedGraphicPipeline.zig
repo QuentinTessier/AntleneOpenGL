@@ -4,6 +4,7 @@ const Information = @import("PipelineInformation.zig");
 const VertexArrayObject = @import("../Resources/VertexArrayObject.zig");
 const hash = @import("GraphicPipeline.zig").hash;
 const Shader = @import("../Resources/Shader.zig");
+const GraphicPipeline = @import("./GraphicPipeline.zig");
 
 pub fn TypedGraphicPipeline(comptime Reflection: type) type {
     return struct {
@@ -47,6 +48,21 @@ pub fn TypedGraphicPipeline(comptime Reflection: type) type {
 
         pub fn deinit(self: @This()) void {
             gl.deleteProgram(self.handle);
+        }
+
+        pub fn toGraphicPipeline(self: @This()) GraphicPipeline {
+            return .{
+                .handle = self.handle,
+                .hash = self.hash,
+                .vao = self.vao,
+                .inputAssemblyState = self.inputAssemblyState,
+                .vertexInputState = self.vertexInputState,
+                .rasterizationState = self.rasterizationState,
+                .multiSampleState = self.multiSampleState,
+                .depthState = self.depthState,
+                .stencilState = self.stencilState,
+                .colorBlendState = self.colorBlendState,
+            };
         }
     };
 }

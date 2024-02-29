@@ -25,12 +25,12 @@ pub const MemoryAccess = enum {
 };
 
 pub const ShaderStorageBufferBinding = struct {
-    binding: usize,
+    binding: u32,
     // memory_access: MemoryAccess,
 };
 
 pub const UniformBufferBinding = struct {
-    binding: usize,
+    binding: u32,
 };
 
 pub const SamplerBinding = struct {
