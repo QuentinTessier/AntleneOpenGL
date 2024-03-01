@@ -104,4 +104,4 @@ pub const Pass = struct {
 
 ```
 
-For current use see [here](https://github.com/QuentinTessier/AntleneOpenGL/blob/reflected_pipeline/src/Pipeline/TypedGraphicPipeline.zig)
+For current use see [here](https://github.com/QuentinTessier/AntleneOpenGL/blob/main/src/Pipeline/TypedGraphicPipeline.zig)
