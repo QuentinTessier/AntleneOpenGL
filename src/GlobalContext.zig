@@ -20,9 +20,7 @@ pub const SparseTextureArray = @import("Resources/SparseArrayTexture.zig");
 pub const Tools = @import("Tools/ReflectShaderToStruct.zig");
 pub const ReflectionType = @import("Pipeline/ReflectionType.zig");
 
-pub const PipelineInformation = @import("Pipeline/PipelineInformation.zig");
-
-pub const GenericTexture = @import("./Resources/Texture/GenericTexture.zig");
+const PipelineInformation = @import("Pipeline/PipelineInformation.zig");
 
 var __initialized: bool = false;
 var __context: Context = undefined;
