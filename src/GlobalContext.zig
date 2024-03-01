@@ -168,12 +168,20 @@ pub const Commands = struct {
         __context.bindGraphicPipeline(pipeline.toGraphicPipeline());
     }
 
-    pub fn BindTexture(name: []const u8, texture: Texture) !void {
+    pub fn BindNamedTexture(name: []const u8, texture: Texture) !void {
         try __context.bindTexture(name, texture);
     }
 
-    pub fn BindSampledTexture(name: []const u8, texture: Texture, sampler: u64) !void {
+    pub fn BindTexture(location: u32, texture: Texture) void {
+        __context.bindTextureBase(location, texture);
+    }
+
+    pub fn BindNamedSampledTexture(name: []const u8, texture: Texture, sampler: u64) !void {
         try __context.bindSampledTexture(name, texture, sampler);
+    }
+
+    pub fn BindSampledTexture(location: u32, texture: Texture, sampler: Sampler) void {
+        __context.bindSampledTextureBase(location, texture, sampler);
     }
 
     pub const BufferBindingType = enum {

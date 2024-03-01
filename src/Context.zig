@@ -327,9 +327,9 @@ pub fn bindTextureBase(_: *Context, index: u32, texture: Texture) void {
     gl.bindTextureUnit(index, texture.handle);
 }
 
-pub fn bindSampledTextureBase(_: *Context, index: u32, texture: Texture, s: u32) void {
+pub fn bindSampledTextureBase(_: *Context, index: u32, texture: Texture, s: Sampler) void {
     gl.bindTextureUnit(index, texture.handle);
-    gl.bindSampler(index, s);
+    gl.bindSampler(index, s.handle);
 }
 
 pub fn bindTexture(self: *Context, name: []const u8, texture: Texture) !void {
@@ -378,7 +378,7 @@ pub fn bindSampledTexture(self: *Context, name: []const u8, texture: Texture, sa
         return error.NoNamedTextureBinding;
     };
     const s = self.caches.samplerObjectCache.get(sampler) orelse return error.MissingSampler;
-    self.bindSampledTextureBase(binding, texture, s.handle);
+    self.bindSampledTextureBase(binding, texture, s);
 }
 
 pub fn getSampler(self: *Context, sampler: u64) !Caches.SamplerObject {
