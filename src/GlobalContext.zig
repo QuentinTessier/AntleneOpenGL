@@ -24,6 +24,7 @@ const PipelineInformation = @import("Pipeline/PipelineInformation.zig");
 
 var __initialized: bool = false;
 var __context: Context = undefined;
+var __glLib: std.DynLib = undefined;
 
 fn checkExtensionSupport() bool {
     var n: i32 = 0;
@@ -43,11 +44,27 @@ fn checkExtensionSupport() bool {
     return found;
 }
 
+const InternalLoadContext = struct {
+    lib: *std.DynLib,
+    loadFunc: *const fn (void, [:0]const u8) ?glFunctionPointer,
+};
+
+fn internalLoadFunc(ctx: InternalLoadContext, name: [:0]const u8) ?glFunctionPointer {
+    const wglPtr = ctx.loadFunc(void{}, name);
+    if (wglPtr) |ptr| {
+        return ptr;
+    } else {
+        return ctx.lib.lookup(glFunctionPointer, name);
+    }
+}
+
 pub fn init(allocator: std.mem.Allocator, comptime loadFunc: fn (void, [:0]const u8) ?glFunctionPointer) !void {
     if (!__initialized) {
-        try gl.load(void{}, loadFunc);
+        __glLib = try std.DynLib.open("opengl32.dll");
 
-        try gl.GL_ARB_bindless_texture.load(void{}, loadFunc);
+        try gl.load(InternalLoadContext{ .lib = &__glLib, .loadFunc = &loadFunc }, internalLoadFunc);
+
+        try gl.GL_ARB_bindless_texture.load(InternalLoadContext{ .lib = &__glLib, .loadFunc = &loadFunc }, internalLoadFunc);
 
         gl.enable(gl.DEBUG_OUTPUT);
         gl.debugMessageCallback(DebugMessenger.callback, null);
@@ -60,6 +77,7 @@ pub fn init(allocator: std.mem.Allocator, comptime loadFunc: fn (void, [:0]const
 pub fn deinit() void {
     __context.deinit();
     __initialized = false;
+    __glLib.close();
 }
 
 pub const Resources = struct {
