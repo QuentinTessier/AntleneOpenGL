@@ -47,6 +47,25 @@ pub fn init(name: ?[]const u8, data: ?[]const u8, flags: BufferStorageFlags) Buf
     return buffer;
 }
 
+pub fn initEmpty(name: ?[]const u8, size: usize, flags: BufferStorageFlags) Buffer {
+    var buffer: Buffer = std.mem.zeroInit(Buffer, .{
+        .storageFlags = flags,
+        .size = size,
+    });
+    const glFlags = flags.toGL();
+    gl.createBuffers(1, @ptrCast(&buffer.handle));
+    gl.namedBufferStorage(buffer.handle, @intCast(buffer.size), null, glFlags);
+    if (flags.map) {
+        const access = gl.MAP_READ_BIT | gl.MAP_WRITE_BIT | gl.MAP_PERSISTENT_BIT | gl.MAP_COHERENT_BIT | gl.MAP_FLUSH_EXPLICIT_BIT;
+        buffer.mappedMemory = @ptrCast(gl.mapNamedBufferRange(buffer.handle, 0, @intCast(buffer.size), access));
+    }
+
+    if (name) |label| {
+        gl.objectLabel(gl.BUFFER, buffer.handle, @intCast(label.len), label.ptr);
+    }
+    return buffer;
+}
+
 pub fn typedInit(name: ?[]const u8, comptime T: type, data: ?[]const T, flags: BufferStorageFlags) Buffer {
     var buffer: Buffer = std.mem.zeroInit(Buffer, .{
         .storageFlags = flags,
@@ -80,4 +99,12 @@ pub fn updateData(self: *Buffer, data: []const u8, offset: usize) void {
     std.debug.assert(self.storageFlags.dynamic);
     std.debug.assert(data.len + offset <= self.size);
     gl.namedBufferSubData(self.handle, @intCast(offset), @intCast(data.len), data.ptr);
+}
+
+pub fn writetoMappedMemory(self: *Buffer, data: []const u8, offset: usize) void {
+    std.debug.assert(self.mappedMemory != null);
+    std.debug.assert(data.len + offset <= self.size);
+
+    const start = self.mappedMemory.? + offset;
+    @memcpy(start, data);
 }

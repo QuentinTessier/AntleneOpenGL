@@ -3,7 +3,8 @@ pub const gl = @import("gl4_6.zig");
 const Context = @import("Context.zig");
 
 const DebugMessenger = @import("./Debug/Messenger.zig");
-const DebugGroup = @import("./Debug/Group.zig");
+pub const DebugGroup = @import("./Debug/Group.zig");
+const MB = @import("./Resources/MemoryBarrier.zig");
 
 pub const glFunctionPointer = gl.FunctionPointer;
 pub const Texture = Context.Texture;
@@ -19,6 +20,8 @@ pub const SparseTextureArray = @import("Resources/SparseArrayTexture.zig");
 
 pub const Tools = @import("Tools/ReflectShaderToStruct.zig");
 pub const ReflectionType = @import("Pipeline/ReflectionType.zig");
+
+pub const ElementType = Context.ElementType;
 
 const PipelineInformation = @import("Pipeline/PipelineInformation.zig");
 
@@ -80,6 +83,10 @@ pub fn deinit() void {
     __glLib.close();
 }
 
+pub fn resizeFramebuffer(width: i32, height: i32) void {
+    __context.swapchainSize = .{ width, height };
+}
+
 pub const Resources = struct {
     pub fn CreateGraphicPipeline(info: PipelineInformation.GraphicPipelineInformation) !Context.GraphicPipeline {
         return __context.caches.createGraphicPipeline(__context.allocator, info);
@@ -101,34 +108,77 @@ pub const Resources = struct {
         return Sampler.init(state);
     }
 
-    pub fn CreateBuffer(name: ?[]const u8, data: ?[]const u8, flags: Buffer.BufferStorageFlags) Buffer {
-        return Buffer.init(name, data, flags);
+    pub fn CreateBuffer(name: ?[]const u8, data: union(enum) { size: usize, ptr: []const u8 }, flags: Buffer.BufferStorageFlags) Buffer {
+        return switch (data) {
+            .size => |size| Buffer.initEmpty(name, size, flags),
+            .ptr => |ptr| Buffer.init(name, ptr, flags),
+        };
     }
 
-    pub inline fn CreateTypedBuffer(name: ?[]const u8, comptime T: type, data: ?[]const T, flags: Buffer.BufferStorageFlags) Buffer {
-        return Buffer.typedInit(name, T, data, flags);
+    pub inline fn CreateTypedBuffer(name: ?[]const u8, comptime T: type, data: union(enum) { count: usize, ptr: []const T }, flags: Buffer.BufferStorageFlags) Buffer {
+        return switch (data) {
+            .count => |count| Buffer.initEmpty(name, count * @sizeOf(T), flags),
+            .ptr => |ptr| Buffer.typedInit(name, T, ptr, flags),
+        };
     }
 
     pub inline fn CreateFramebuffer(name: ?[]const u8, info: Framebuffer.FramebufferCreateInfo) !Framebuffer {
         return __context.createFramebuffer(name, info);
     }
 
-    pub const DrawElementsIndirectCommand = struct {
+    pub const DrawElementsIndirectCommand = extern struct {
         count: u32,
         instanceCount: u32,
         firstIndex: u32,
         baseVertex: i32,
         baseInstance: u32,
     };
+
+    pub const HostMemory = struct {
+        // [len]DrawElementsIndirectCommand + [1]u32{ __drawCount }
+        pub const DrawElementsIndirectCommandList = extern struct {
+            data: []u8,
+
+            pub fn getCount(self: *DrawElementsIndirectCommandList) usize {
+                return @divExact(self.data.len - 4, @sizeOf(DrawElementsIndirectCommand));
+            }
+
+            pub fn getCommands(self: *DrawElementsIndirectCommandList) []DrawElementsIndirectCommand {
+                const len = self.getCount();
+                return std.mem.bytesAsSlice(DrawElementsIndirectCommand, self.data[0 .. len - 4]);
+            }
+
+            pub fn getOffsetToDrawCount(self: *const DrawElementsIndirectCommand) usize {
+                const len = self.getCount();
+                const offset = @sizeOf(DrawElementsIndirectCommand) * len;
+                const drawCount: u32 = std.mem.bytesToValue(u32, self.data[offset..]);
+
+                return @intCast(drawCount);
+            }
+        };
+
+        // Doesn't have to be managed since memory is HostMemory and user should be able to keep track of it's command buffers
+        pub fn CreateDrawElementsIndirectCommandList(allocator: std.mem.Allocator, count: u32) !DrawElementsIndirectCommandList {
+            const memory = try allocator.alloc(u8, @sizeOf(DrawElementsIndirectCommand) * @as(usize, @intCast(count)) + @sizeOf(u32));
+            @memset(memory, 0);
+
+            const start = @sizeOf(DrawElementsIndirectCommand) * count;
+            const drawCount: *u32 = std.mem.bytesAsValue(u32, memory[start .. start + 4]);
+            drawCount.* = count;
+            return .{
+                .data = memory,
+            };
+        }
+    };
 };
 
 pub const Rendering = struct {
-    pub fn toSwapchain(info: Context.SwapchainRenderingInformation, pass: anytype) !void {
-        try __context.renderToSwapchain(info, pass);
+    pub fn toSwapchain(info: Context.SwapchainRenderingInformation, pass: anytype, extraArgs: anytype) !void {
+        try __context.renderToSwapchain(info, pass, extraArgs);
     }
 
-    pub fn toFramebuffer(info: Context.FramebufferRenderingInformation, pass: anytype) !void {
-        try __context.renderToFramebuffer(info, pass);
+    pub fn toFramebuffer(info: Context.FramebufferRenderingInformation, pass: anytype, extraArgs: anytype) !void {
+        try __context.renderToFramebuffer(info, pass, extraArgs);
     }
 
     const Offset = struct {
@@ -224,13 +274,13 @@ pub const Commands = struct {
         }
     }
 
-    pub fn BindVertexBuffer(binding: u32, buffer: Buffer, offset: usize) void {
+    pub fn BindVertexBuffer(binding: u32, buffer: Buffer, offset: usize, stride: ?i32) void {
         gl.vertexArrayVertexBuffer(
             __context.bondVertexArrayObject.handle,
             binding,
             buffer.handle,
             @intCast(offset),
-            @intCast(buffer.stride),
+            if (stride) |s| s else @as(i32, @intCast(buffer.stride)),
         );
     }
 
@@ -293,17 +343,39 @@ pub const Commands = struct {
         );
     }
 
-    //pub fn DrawIndirectCount(commands: Buffer, commandOffset: usize, count: Buffer, countOffset: usize, commandCount: usize, commandStride: usize) void {
-    //    gl.bindBuffer(gl.DRAW_INDIRECT_BUFFER, commands.handle);
-    //    gl.bindBuffer(gl.PARAMETER_BUFFER, count.handle);
-    //    gl.multiDrawArraysIndirectCount(
-    //        @intFromEnum(__context.currentTopology),
-    //        @ptrFromInt(commandOffset * commandStride),
-    //        @intCast(countOffset),
-    //        @intCast(commandCount),
-    //        @intCast(commandStride),
-    //    );
-    //}
+    // pub fn DrawIndirectCount(commands: Buffer, commandOffset: usize, count: Buffer, countOffset: usize, commandCount: usize, commandStride: usize) void {
+    //     gl.bindBuffer(gl.DRAW_INDIRECT_BUFFER, commands.handle);
+    //     gl.bindBuffer(gl.PARAMETER_BUFFER, count.handle);
+    //     gl.multiDrawArraysIndirectCount(
+    //         @intFromEnum(__context.currentTopology),
+    //         @ptrFromInt(commandOffset * commandStride),
+    //         @intCast(countOffset),
+    //         @intCast(commandCount),
+    //         @intCast(commandStride),
+    //     );
+    // }
+
+    pub fn MultiDrawElementsIndirectCountHostMemory(commands: Resources.HostMemory.DrawElementsIndirectCommandList, maxDrawCount: usize) void {
+        gl.multiDrawElementsIndirectCount(
+            @intFromEnum(__context.currentTopology),
+            @intFromEnum(__context.currentElementType),
+            commands.data.ptr,
+            @intCast(commands.getOffsetToDrawCount()),
+            @intCast(maxDrawCount),
+            0,
+        );
+    }
+
+    pub fn MultiDrawElementsIndirectCountHostMemory2(commands: []const Resources.DrawElementsIndirectCommand, maxDrawCount: usize) void {
+        gl.multiDrawElementsIndirectCount(
+            @intFromEnum(__context.currentTopology),
+            @intFromEnum(__context.currentElementType),
+            commands.data.ptr,
+            @intCast(commands.len),
+            @intCast(maxDrawCount),
+            0,
+        );
+    }
 
     pub fn DrawElementsIndirect(commands: Buffer, commandOffset: usize, commandCount: usize, commandStride: usize) void {
         gl.bindBuffer(gl.DRAW_INDIRECT_BUFFER, commands.handle);
@@ -323,5 +395,13 @@ pub const Commands = struct {
     pub fn DispatchIndirect(commands: Buffer, commandOffset: usize) void {
         gl.bindBuffer(gl.DISPATCH_INDIRECT_BUFFER, commands.handle);
         gl.dispatchComputeIndirect(@intCast(commandOffset));
+    }
+
+    pub fn TextureBarrier() void {
+        return @import("./Resources/TextureBarrier.zig").TextureBarrier();
+    }
+
+    pub fn MemoryBarrier(flags: MB.Flags) void {
+        return MB.MemoryBarrier(flags);
     }
 };

@@ -479,6 +479,8 @@ pub fn reflectInterface(allocator: std.mem.Allocator, program: u32, interface: g
             } else {
                 allocator.free(name);
             }
+        } else {
+            allocator.free(name);
         }
     }
     return resources;

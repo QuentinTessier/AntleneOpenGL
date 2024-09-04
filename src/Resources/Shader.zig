@@ -164,6 +164,36 @@ pub fn fromFile(allocator: std.mem.Allocator, path: []const u8) !u32 {
     }
 }
 
+pub fn loadFile(allocator: std.mem.Allocator, comptime SourceType: ShaderType, path: []const u8) !(blk: {
+    switch (SourceType) {
+        .glsl => break :blk []u8,
+        .spirv => break :blk []u32,
+    }
+}) {
+    return switch (SourceType) {
+        .glsl => blk: {
+            var file = try std.fs.cwd().openFile(path, .{});
+            defer file.close();
+
+            const fileSize = try file.getEndPos();
+            const content = try allocator.alloc(u8, fileSize + 1);
+            _ = try file.readAll(std.mem.sliceAsBytes(content));
+            content[fileSize] = 0;
+            break :blk content;
+        },
+        .spirv => blk: {
+            var file = try std.fs.cwd().openFile(path, .{});
+            defer file.close();
+
+            const fileSize = try file.getEndPos();
+            const content = try allocator.alloc(u32, @divExact(fileSize, 4));
+
+            _ = try file.readAll(std.mem.sliceAsBytes(content));
+            break :blk content;
+        },
+    };
+}
+
 pub fn linkProgram(shaders: []const u32) !u32 {
     const program = gl.createProgram();
     for (shaders) |shader| {

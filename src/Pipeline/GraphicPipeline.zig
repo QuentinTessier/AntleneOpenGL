@@ -44,12 +44,16 @@ pub inline fn hash(
 }
 
 pub fn init(allocator: std.mem.Allocator, info: GraphicPipelineInformation, vao: VertexArrayObject) !GraphicPipeline {
+    std.log.info("Entering GraphicPipeline.init()", .{});
     const vertex_shader = try Information.compileShader(gl.VERTEX_SHADER, info.vertexShaderSource);
     errdefer gl.deleteShader(vertex_shader);
+    std.log.info("Compiled vertex shader", .{});
     const fragment_shader = try Information.compileShader(gl.FRAGMENT_SHADER, info.fragmentShaderSource);
     errdefer gl.deleteShader(fragment_shader);
+    std.log.info("Compiled fragment shader", .{});
     const program = try Information.linkProgram(&.{ vertex_shader, fragment_shader });
     errdefer gl.deleteProgram(program);
+    std.log.info("Linked program", .{});
 
     if (std.debug.runtime_safety) {
         if (info.name) |name| {
@@ -57,8 +61,8 @@ pub fn init(allocator: std.mem.Allocator, info: GraphicPipelineInformation, vao:
         }
     }
 
-    const h = hash(info.toTypedGraphicPipelineInformation(), info.vertexInputState, info.vertexShaderSource, info.fragmentShaderSource);
-    std.log.info("Created new pipeline with hash {}", .{h});
+    const h = hash(info.toTypedGraphicPipelineInformation(), info.vertexInputState, info.vertexShaderSource.slice(), info.fragmentShaderSource.slice());
+    std.log.info("Hashed data", .{});
     return .{
         .handle = program,
         .hash = h,
@@ -320,6 +324,7 @@ pub fn updateColorBlendState(self: Information.PipelineColorBlendState, other: ?
         gl.blendColor(self.blendConstants[0], self.blendConstants[1], self.blendConstants[2], self.blendConstants[3]);
 
         for (self.attachments, 0..) |attachment, index| {
+            gl.enablei(gl.BLEND, @intCast(index));
             if (attachment.blendEnable) {
                 gl.blendFuncSeparatei(
                     @intCast(index),

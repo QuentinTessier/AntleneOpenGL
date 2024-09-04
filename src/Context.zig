@@ -37,6 +37,18 @@ pub const Viewport = struct {
     depthRange: DepthRange = .NegativeOneToOne,
 };
 
+pub const SwapchainViewport = struct {
+    extent: ?struct {
+        x: u32,
+        y: u32,
+        width: u32,
+        height: u32,
+    } = null,
+    minDepth: f32 = 0.0,
+    maxDepth: f32 = 1.0,
+    depthRange: DepthRange = .NegativeOneToOne,
+};
+
 pub const SwapchainRenderingInformation = struct {
     colorLoadOp: AttachementLoadOp = .keep,
     clearColor: @Vector(4, f32) = .{ 0.0, 0.0, 0.0, 1.0 },
@@ -44,7 +56,7 @@ pub const SwapchainRenderingInformation = struct {
     clearDepthValue: f32 = 0.0,
     stencilLoadOp: AttachementLoadOp = .keep,
     clearStencilValue: u32 = 0,
-    viewport: Viewport,
+    viewport: SwapchainViewport,
 };
 
 pub const ColorAttachment = struct {
@@ -97,10 +109,12 @@ caches: Caches = .{},
 previousPipeline: ?Pipeline = null,
 pipelineDebugGroupPushed: bool = false,
 
+swapchainSize: @Vector(2, i32) = .{ 0, 0 },
+
 currentTopology: PrimitiveTopology = .triangle,
 bondVertexArrayObject: VertexArrayObject = undefined,
 currentElementType: ElementType = .u16,
-lastDepthMask: bool = true,
+lastDepthMask: bool = false,
 lastStencilWriteMask: [2]i32 = .{ -1, -1 },
 lastColorMask: [8]ColorComponentFlags = undefined,
 
@@ -129,13 +143,20 @@ fn glEnableOrDisable(option: gl.GLenum, b: bool) void {
     }
 }
 
-pub fn renderToSwapchain(self: *Context, info: SwapchainRenderingInformation, pass: anytype) !void {
+fn isValidStruct(comptime T: type) bool {
+    return @hasDecl(T, "execute");
+}
+
+fn UnwrapContainer(comptime T: type) type {
+    return switch (@typeInfo(T)) {
+        .Struct => T,
+        .Pointer => |ptr| ptr.child,
+        else => @panic("Unsupported type"),
+    };
+}
+
+pub fn renderToSwapchain(self: *Context, info: SwapchainRenderingInformation, pass: anytype, extraArgs: anytype) !void {
     const T: type = @TypeOf(pass);
-    comptime {
-        if (T != void and (@typeInfo(T) != .Struct or !@hasDecl(T, "execute"))) {
-            @compileError("RenderToSwapchain(info: SwapchainRenderingInformation, pass: Pass) should have\n\tPass = struct {\n\t\tstates: PipelineOrOtherObjects,\n\t\t..., \n\t\tpub fn execute(pass: struct {}) !void {...}\n\t};");
-        }
-    }
     switch (info.colorLoadOp) {
         .keep => {},
         .clear => {
@@ -161,14 +182,40 @@ pub fn renderToSwapchain(self: *Context, info: SwapchainRenderingInformation, pa
         },
     }
 
-    self.updateViewport(info.viewport);
+    if (info.viewport.extent) |extent| {
+        const viewport = Viewport{
+            .extent = .{
+                .x = extent.x,
+                .y = extent.y,
+                .width = extent.width,
+                .height = extent.height,
+            },
+            .depthRange = info.viewport.depthRange,
+            .maxDepth = info.viewport.maxDepth,
+            .minDepth = info.viewport.minDepth,
+        };
+        self.updateViewport(viewport);
+    } else {
+        const viewport = Viewport{
+            .extent = .{
+                .x = 0,
+                .y = 0,
+                .width = @intCast(self.swapchainSize[0]),
+                .height = @intCast(self.swapchainSize[1]),
+            },
+            .depthRange = info.viewport.depthRange,
+            .maxDepth = info.viewport.maxDepth,
+            .minDepth = info.viewport.minDepth,
+        };
+        self.updateViewport(viewport);
+    }
 
     if (@TypeOf(pass) != void) {
-        try @call(.auto, T.execute, .{pass});
+        try @call(.auto, UnwrapContainer(T).execute, .{pass} ++ extraArgs);
     }
 }
 
-pub fn renderToFramebuffer(self: *Context, info: FramebufferRenderingInformation, pass: anytype) !void {
+pub fn renderToFramebuffer(self: *Context, info: FramebufferRenderingInformation, pass: anytype, extraArgs: anytype) !void {
     const T: type = @TypeOf(pass);
     comptime {
         if (T != void and (@typeInfo(T) != .Struct or !@hasDecl(T, "execute"))) {
@@ -251,7 +298,7 @@ pub fn renderToFramebuffer(self: *Context, info: FramebufferRenderingInformation
     self.updateViewport(info.viewport);
 
     if (@TypeOf(pass) != void) {
-        try @call(.auto, T.execute, .{pass});
+        try @call(.auto, T.execute, .{pass} ++ extraArgs);
     }
 }
 
@@ -308,12 +355,8 @@ pub fn bindGraphicPipeline(self: *Context, pipeline: GraphicPipeline) void {
 pub fn bindComputePipeline(self: *Context, pipeline: ComputePipeline) void {
     if (self.previousPipeline) |previousPipeline| {
         switch (previousPipeline) {
-            .Compute => |previous| {
-                if (pipeline.hash == previous.hash) {
-                    return;
-                } else {
-                    gl.useProgram(pipeline.handle);
-                }
+            .Compute => {
+                gl.useProgram(pipeline.handle);
             },
             .Graphics => gl.useProgram(pipeline.handle),
         }
