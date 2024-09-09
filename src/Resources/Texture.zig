@@ -1,6 +1,8 @@
 const std = @import("std");
 const gl = @import("../gl4_6.zig");
 
+const Sampler = @import("./Sampler.zig");
+
 pub const Texture = @This();
 
 pub fn Extent(comptime T: type) type {
@@ -166,8 +168,27 @@ pub fn init(info: TextureCreateInfo) Texture {
     };
 }
 
-pub fn generateBindlessHandle(self: *Texture) void {
+pub fn generateBindlessHandle(self: *Texture, state: Sampler.SamplerState) void {
+    const minFilter: u32 = switch (state.mipFilter) {
+        .none => if (state.minFilter == .linear) gl.LINEAR else gl.NEAREST,
+        .linear => if (state.magFilter == .linear) gl.LINEAR_MIPMAP_LINEAR else gl.NEAREST_MIPMAP_LINEAR,
+        .nearest => if (state.magFilter == .linear) gl.LINEAR_MIPMAP_NEAREST else gl.NEAREST_MIPMAP_NEAREST,
+    };
+    gl.textureParameteri(self.handle, gl.TEXTURE_MAG_FILTER, @intCast(@intFromEnum(state.magFilter)));
+    gl.textureParameteri(self.handle, gl.TEXTURE_MIN_FILTER, @intCast(minFilter));
+    switch (state.broderColor) {
+        .float => |color| {
+            gl.textureParameterfv(self.handle, gl.TEXTURE_BORDER_COLOR, (&color).ptr);
+        },
+        .integer => |color| {
+            gl.textureParameteriv(self.handle, gl.TEXTURE_BORDER_COLOR, (&color).ptr);
+        },
+    }
+    gl.textureParameteri(self.handle, gl.TEXTURE_WRAP_R, @intCast(@intFromEnum(state.wrapR)));
+    gl.textureParameteri(self.handle, gl.TEXTURE_WRAP_S, @intCast(@intFromEnum(state.wrapS)));
+    gl.textureParameteri(self.handle, gl.TEXTURE_WRAP_T, @intCast(@intFromEnum(state.wrapT)));
     self.bindlessHandle = gl.GL_ARB_bindless_texture.getTextureHandleARB(self.handle);
+    if (self.bindlessHandle == 0) std.log.err("Error bindless handle is 0", .{}) else std.log.info("Bindless handle {}", .{self.bindlessHandle});
     gl.GL_ARB_bindless_texture.makeTextureHandleResidentARB(self.bindlessHandle);
 }
 
