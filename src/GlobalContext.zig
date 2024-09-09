@@ -13,7 +13,12 @@ pub const GraphicPipeline = @import("Pipeline/GraphicPipeline.zig");
 pub const TypedGraphicPipeline = @import("Pipeline/TypedGraphicPipeline.zig").TypedGraphicPipeline;
 pub const ComputePipeline = @import("Pipeline/ComputePipeline.zig");
 pub const Sampler = @import("Resources/Sampler.zig");
+
 pub const Buffer = @import("Resources/Buffer.zig");
+pub const MappedBuffer = @import("Resources/MappedBuffer.zig");
+pub const DynamicBuffer = @import("Resources/DynamicBuffer.zig");
+pub const StaticBuffer = @import("Resources/StaticBuffer.zig");
+
 pub const Framebuffer = @import("Resources/Framebuffer.zig");
 pub const Shader = @import("Resources/Shader.zig");
 pub const SparseTextureArray = @import("Resources/SparseArrayTexture.zig");
@@ -108,18 +113,22 @@ pub const Resources = struct {
         return Sampler.init(state);
     }
 
-    pub fn CreateBuffer(name: ?[]const u8, data: union(enum) { size: usize, ptr: []const u8 }, flags: Buffer.BufferStorageFlags) Buffer {
+    pub fn CreateMappedBuffer(name: ?[]const u8, comptime T: type, data: union(enum) { size: usize, ptr: []const T }, flags: MappedBuffer.Flags) !MappedBuffer {
         return switch (data) {
-            .size => |size| Buffer.initEmpty(name, size, flags),
-            .ptr => |ptr| Buffer.init(name, ptr, flags),
+            .size => |size| MappedBuffer.initEmpty(name, T, size, flags),
+            .ptr => |ptr| MappedBuffer.init(name, T, ptr, flags),
         };
     }
 
-    pub inline fn CreateTypedBuffer(name: ?[]const u8, comptime T: type, data: union(enum) { count: usize, ptr: []const T }, flags: Buffer.BufferStorageFlags) Buffer {
+    pub fn CreateDynamicBuffer(name: ?[]const u8, data: union(enum) { size: usize, ptr: []const u8 }, stride: usize) DynamicBuffer {
         return switch (data) {
-            .count => |count| Buffer.initEmpty(name, count * @sizeOf(T), flags),
-            .ptr => |ptr| Buffer.typedInit(name, T, ptr, flags),
+            .size => |size| DynamicBuffer.initEmpty(name, size, stride),
+            .ptr => |ptr| DynamicBuffer.init(name, ptr, stride),
         };
+    }
+
+    pub fn CreateStaticBuffer(name: ?[]const u8, data: []const u8, stride: usize) StaticBuffer {
+        return StaticBuffer.init(name, data, stride);
     }
 
     pub inline fn CreateFramebuffer(name: ?[]const u8, info: Framebuffer.FramebufferCreateInfo) !Framebuffer {
@@ -256,21 +265,34 @@ pub const Commands = struct {
     };
 
     pub const BufferRange = struct {
-        offset: usize = 0,
-        size: usize = 0,
+        offset: u32 = 0,
+        size: u32 = 0,
     };
 
-    pub fn BindStorageBuffer(binding: u32, buffer: Buffer, info: BufferBindingType, range: BufferRange) void {
+    pub const BufferBindingInfo = union(enum) {
+        _whole: void,
+        _range: BufferRange,
+
+        pub fn whole() BufferBindingInfo {
+            return .{ ._whole = void{} };
+        }
+
+        pub fn range(offset: u32, size: u32) BufferBindingInfo {
+            return .{ ._range = .{ .offset = offset, .size = size } };
+        }
+    };
+
+    pub fn BindStorageBuffer(binding: u32, buffer: Buffer, info: BufferBindingInfo) void {
         switch (info) {
-            .whole => gl.bindBufferBase(gl.SHADER_STORAGE_BUFFER, binding, buffer.handle),
-            .range => gl.bindBufferRange(gl.SHADER_STORAGE_BUFFER, binding, buffer.handle, @intCast(range.offset), @intCast(range.size)),
+            ._whole => gl.bindBufferBase(gl.SHADER_STORAGE_BUFFER, binding, buffer.handle),
+            ._range => |range| gl.bindBufferRange(gl.SHADER_STORAGE_BUFFER, binding, buffer.handle, @intCast(range.offset), @intCast(range.size)),
         }
     }
 
-    pub fn BindUniformBuffer(binding: u32, buffer: Buffer, info: BufferBindingType, range: BufferRange) void {
+    pub fn BindUniformBuffer(binding: u32, buffer: Buffer, info: BufferBindingInfo) void {
         switch (info) {
-            .whole => gl.bindBufferBase(gl.UNIFORM_BUFFER, binding, buffer.handle),
-            .range => gl.bindBufferRange(gl.UNIFORM_BUFFER, binding, buffer.handle, @intCast(range.offset), @intCast(range.size)),
+            ._whole => gl.bindBufferBase(gl.UNIFORM_BUFFER, binding, buffer.handle),
+            ._range => |range| gl.bindBufferRange(gl.UNIFORM_BUFFER, binding, buffer.handle, @intCast(range.offset), @intCast(range.size)),
         }
     }
 
